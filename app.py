@@ -1,17 +1,17 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-from datetime import date, datetime
+from datetime import date
 import os
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable, Image as RLImage
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import io
 
-# ── DB setup ──────────────────────────────────────────────
+# ── DB ────────────────────────────────────────────────────
 DB_PATH = "limo_crm.db"
 
 def get_conn():
@@ -19,8 +19,7 @@ def get_conn():
 
 def init_db():
     conn = get_conn()
-    c = conn.cursor()
-    c.executescript("""
+    conn.executescript("""
     CREATE TABLE IF NOT EXISTS clients (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         account_number TEXT UNIQUE,
@@ -60,199 +59,259 @@ def init_db():
         pdf_data BLOB,
         FOREIGN KEY(client_id) REFERENCES clients(id)
     );
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
     """)
+    conn.commit()
+    conn.close()
+
+def get_setting(key, default=""):
+    conn = get_conn()
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    conn.close()
+    return row[0] if row else default
+
+def set_setting(key, value):
+    conn = get_conn()
+    conn.execute("INSERT OR REPLACE INTO settings (key,value) VALUES(?,?)", (key, value))
     conn.commit()
     conn.close()
 
 def next_account_number():
     conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT account_number FROM clients ORDER BY id DESC LIMIT 1")
-    row = c.fetchone()
+    row = conn.execute("SELECT account_number FROM clients ORDER BY id DESC LIMIT 1").fetchone()
     conn.close()
     if not row:
         return "ACC-1001"
     try:
-        num = int(row[0].split("-")[1]) + 1
-    except Exception:
-        num = 1001
-    return f"ACC-{num}"
+        return f"ACC-{int(row[0].split('-')[1])+1}"
+    except:
+        return "ACC-1001"
 
 def next_invoice_number():
     conn = get_conn()
-    c = conn.cursor()
-    c.execute("SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1")
-    row = c.fetchone()
+    row = conn.execute("SELECT invoice_number FROM invoices ORDER BY id DESC LIMIT 1").fetchone()
     conn.close()
     if not row:
         return "INV-0001"
     try:
-        num = int(row[0].split("-")[1]) + 1
-    except Exception:
-        num = 1
-    return f"INV-{num:04d}"
+        return f"INV-{int(row[0].split('-')[1])+1:04d}"
+    except:
+        return "INV-0001"
 
-# ── PDF Generation ────────────────────────────────────────
-def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand_total):
+# ── PDF ───────────────────────────────────────────────────
+def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand_total, logo_bytes=None, company_info=None):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter,
-                            leftMargin=0.5*inch, rightMargin=0.5*inch,
-                            topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        leftMargin=0.6*inch, rightMargin=0.6*inch,
+        topMargin=0.5*inch, bottomMargin=0.5*inch
+    )
+
+    GOLD  = colors.HexColor("#B8860B")
+    DARK  = colors.HexColor("#1a1a2e")
+    LGRAY = colors.HexColor("#f7f7f7")
+    WHITE = colors.white
+
+    def style(name, **kw):
+        return ParagraphStyle(name, **kw)
+
+    co = company_info or {}
+    co_name    = co.get("name",    "EXECUTIVE LIMO")
+    co_tagline = co.get("tagline", "Premium Chauffeur Services")
+    co_address = co.get("address", "123 Luxury Drive, Beverly Hills, CA 90210")
+    co_phone   = co.get("phone",   "(310) 555-0100")
+    co_email   = co.get("email",   "billing@executivelimo.com")
+
     story = []
-    styles = getSampleStyleSheet()
 
-    gold = colors.HexColor("#B8860B")
-    dark = colors.HexColor("#1a1a2e")
-    light_gray = colors.HexColor("#f5f5f5")
+    # ── HEADER ──
+    # Logo cell
+    if logo_bytes:
+        logo_buf = io.BytesIO(logo_bytes)
+        logo_img = RLImage(logo_buf, width=1.4*inch, height=1.0*inch)
+        logo_img.hAlign = 'LEFT'
+        logo_cell = logo_img
+    else:
+        logo_cell = Paragraph(
+            f"<b>{co_name}</b>",
+            style('logotext', fontSize=20, textColor=DARK, fontName='Helvetica-Bold')
+        )
 
-    title_style = ParagraphStyle('title', fontSize=22, textColor=dark,
-                                  spaceAfter=2, fontName='Helvetica-Bold', alignment=TA_LEFT)
-    sub_style   = ParagraphStyle('sub', fontSize=9, textColor=colors.HexColor("#555555"),
-                                  spaceAfter=2, fontName='Helvetica')
-    label_style = ParagraphStyle('label', fontSize=8, textColor=colors.HexColor("#888888"),
-                                  fontName='Helvetica-Bold')
-    value_style = ParagraphStyle('value', fontSize=9, textColor=dark, fontName='Helvetica')
-    inv_style   = ParagraphStyle('inv', fontSize=9, textColor=dark, fontName='Helvetica', alignment=TA_RIGHT)
-
-    # Header row: company left, invoice info right
-    company_block = [
-        Paragraph("✦ EXECUTIVE LIMO", title_style),
-        Paragraph("Premium Chauffeur Services", sub_style),
-        Paragraph("123 Luxury Drive, Beverly Hills, CA 90210", sub_style),
-        Paragraph("📞 (310) 555-0100  ✉ billing@executivelimo.com", sub_style),
-    ]
-    invoice_block = [
-        Paragraph(f"<b>INVOICE</b>", ParagraphStyle('h', fontSize=18, textColor=gold,
-                   fontName='Helvetica-Bold', alignment=TA_RIGHT)),
-        Paragraph(f"Invoice #: {invoice_number}", inv_style),
-        Paragraph(f"Date: {invoice_date}", inv_style),
-        Paragraph(f"Account: {client['account_number']}", inv_style),
+    # Company info cell
+    company_cell = [
+        Paragraph(f"<b>{co_name}</b>",
+                  style('cn', fontSize=15, textColor=DARK, fontName='Helvetica-Bold', spaceAfter=2)),
+        Paragraph(co_tagline,
+                  style('ct', fontSize=8, textColor=colors.HexColor("#666"), fontName='Helvetica', spaceAfter=2)),
+        Paragraph(co_address,
+                  style('ca', fontSize=8, textColor=colors.HexColor("#444"), fontName='Helvetica', spaceAfter=1)),
+        Paragraph(f"Tel: {co_phone}   Email: {co_email}",
+                  style('cp', fontSize=8, textColor=colors.HexColor("#444"), fontName='Helvetica')),
     ]
 
-    header_data = [[company_block, invoice_block]]
-    header_table = Table(header_data, colWidths=[3.8*inch, 3.2*inch])
-    header_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('ALIGN', (1,0), (1,0), 'RIGHT'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 12),
+    # Invoice meta cell (right)
+    inv_cell = [
+        Paragraph("INVOICE",
+                  style('inv', fontSize=22, textColor=GOLD, fontName='Helvetica-Bold', alignment=TA_RIGHT, spaceAfter=4)),
+        Paragraph(f"<b>Invoice #:</b> {invoice_number}",
+                  style('im', fontSize=9, fontName='Helvetica', alignment=TA_RIGHT, spaceAfter=2)),
+        Paragraph(f"<b>Date:</b> {invoice_date}",
+                  style('id2', fontSize=9, fontName='Helvetica', alignment=TA_RIGHT, spaceAfter=2)),
+        Paragraph(f"<b>Account:</b> {client['account_number']}",
+                  style('ia', fontSize=9, fontName='Helvetica', alignment=TA_RIGHT)),
+    ]
+
+    header_tbl = Table(
+        [[logo_cell, company_cell, inv_cell]],
+        colWidths=[1.5*inch, 3.3*inch, 2.6*inch]
+    )
+    header_tbl.setStyle(TableStyle([
+        ('VALIGN',       (0,0), (-1,-1), 'TOP'),
+        ('ALIGN',        (2,0), (2,0),   'RIGHT'),
+        ('LEFTPADDING',  (1,0), (1,0),   10),
+        ('RIGHTPADDING', (2,0), (2,0),   0),
+        ('BOTTOMPADDING',(0,0), (-1,-1), 8),
     ]))
-    story.append(header_table)
-    story.append(HRFlowable(width="100%", thickness=2, color=gold, spaceAfter=12))
+    story.append(header_tbl)
+    story.append(HRFlowable(width="100%", thickness=2, color=GOLD, spaceAfter=10))
 
-    # Bill To
-    bill_data = [[
-        [Paragraph("BILL TO", label_style),
-         Paragraph(f"<b>{client['client_name']}</b>", ParagraphStyle('cn', fontSize=11, fontName='Helvetica-Bold', textColor=dark)),
-         Paragraph(client.get('company_name','') or '', value_style),
-         Paragraph(client.get('phone','') or '', value_style),
-         Paragraph(client.get('email','') or '', value_style),
-         Paragraph(client.get('address','') or '', value_style)],
-        ""
-    ]]
-    bill_table = Table(bill_data, colWidths=[4.5*inch, 2.5*inch])
-    bill_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (0,0), light_gray),
-        ('ROWPADDING', (0,0), (-1,-1), 8),
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+    # ── BILL TO ──
+    lbl = style('lbl', fontSize=7, textColor=colors.HexColor("#999"), fontName='Helvetica-Bold', spaceAfter=3)
+    val = style('val', fontSize=9, textColor=DARK, fontName='Helvetica', spaceAfter=1)
+    bold_val = style('bval', fontSize=11, textColor=DARK, fontName='Helvetica-Bold', spaceAfter=2)
+
+    bill_items = [Paragraph("BILL TO", lbl)]
+    bill_items.append(Paragraph(client.get('client_name',''), bold_val))
+    if client.get('company_name'):
+        bill_items.append(Paragraph(client['company_name'], val))
+    if client.get('phone'):
+        bill_items.append(Paragraph(client['phone'], val))
+    if client.get('email'):
+        bill_items.append(Paragraph(client['email'], val))
+    if client.get('address'):
+        bill_items.append(Paragraph(client['address'], val))
+
+    bill_tbl = Table([[bill_items, ""]], colWidths=[3.8*inch, 3.6*inch])
+    bill_tbl.setStyle(TableStyle([
+        ('BACKGROUND',   (0,0), (0,0), LGRAY),
+        ('TOPPADDING',   (0,0), (0,0), 8),
+        ('BOTTOMPADDING',(0,0), (0,0), 10),
+        ('LEFTPADDING',  (0,0), (0,0), 10),
+        ('VALIGN',       (0,0), (-1,-1), 'TOP'),
+        ('ROUNDEDCORNERS', (0,0), (0,0), [4,4,4,4]),
     ]))
-    story.append(bill_table)
-    story.append(Spacer(1, 14))
+    story.append(bill_tbl)
+    story.append(Spacer(1, 12))
 
-    # Trip table header
-    col_headers = ['Date', 'Conf #', 'Passenger', 'Service', 'Vehicle',
-                   'Base Rate', 'Gratuity', 'Fuel', 'Misc', 'Total']
-    col_widths = [0.65*inch, 0.75*inch, 1.0*inch, 0.85*inch, 0.75*inch,
-                  0.65*inch, 0.65*inch, 0.55*inch, 0.55*inch, 0.65*inch]
+    # ── TRIP TABLE ──
+    # Columns: Date | Conf# | CLIENT INFO (Passenger/Service/Vehicle) | Base Rate | Gratuity | Fuel | Misc | Total
+    # We'll split into readable columns as per your spec
+    headers = ['Date', 'Conf #', 'Passenger', 'Service Type', 'Vehicle',
+               'Base Rate', 'Gratuity', 'Fuel Charge', 'Misc', 'Total']
+    col_w   = [0.7*inch, 0.7*inch, 1.0*inch, 1.05*inch, 0.7*inch,
+               0.65*inch, 0.65*inch, 0.7*inch, 0.5*inch, 0.65*inch]
 
-    table_data = [col_headers]
+    hdr_style = style('th', fontSize=7.5, textColor=WHITE, fontName='Helvetica-Bold', alignment=TA_CENTER)
+    cell_style = style('td', fontSize=8, textColor=DARK, fontName='Helvetica', alignment=TA_CENTER)
+    num_style  = style('num', fontSize=8, textColor=DARK, fontName='Helvetica', alignment=TA_RIGHT)
+
+    rows = [[Paragraph(h, hdr_style) for h in headers]]
     for t in trips_data:
-        table_data.append([
-            t.get('pickup_date',''),
-            t.get('confirmation_number',''),
-            t.get('passenger_name',''),
-            t.get('service_type',''),
-            t.get('vehicle_type',''),
-            f"${t.get('base_rate',0):.2f}",
-            f"${t.get('gratuity',0):.2f}",
-            f"${t.get('fuel_charge',0):.2f}",
-            f"${t.get('misc_charge',0):.2f}",
-            f"${t.get('trip_total',0):.2f}",
+        rows.append([
+            Paragraph(str(t.get('pickup_date','')), cell_style),
+            Paragraph(str(t.get('confirmation_number','')), cell_style),
+            Paragraph(str(t.get('passenger_name','')), cell_style),
+            Paragraph(str(t.get('service_type','')), cell_style),
+            Paragraph(str(t.get('vehicle_type','')), cell_style),
+            Paragraph(f"${t.get('base_rate',0):.2f}", num_style),
+            Paragraph(f"${t.get('gratuity',0):.2f}", num_style),
+            Paragraph(f"${t.get('fuel_charge',0):.2f}", num_style),
+            Paragraph(f"${t.get('misc_charge',0):.2f}", num_style),
+            Paragraph(f"${t.get('trip_total',0):.2f}", num_style),
         ])
 
     # Grand total row
-    table_data.append(['', '', '', '', 'GRAND TOTAL', '', '', '', '',
-                        f"${grand_total:.2f}"])
+    gt_style = style('gt', fontSize=9, textColor=WHITE, fontName='Helvetica-Bold', alignment=TA_RIGHT)
+    rows.append([
+        Paragraph("", gt_style),
+        Paragraph("", gt_style),
+        Paragraph("", gt_style),
+        Paragraph("", gt_style),
+        Paragraph("GRAND TOTAL", gt_style),
+        Paragraph("", gt_style),
+        Paragraph("", gt_style),
+        Paragraph("", gt_style),
+        Paragraph("", gt_style),
+        Paragraph(f"${grand_total:.2f}", gt_style),
+    ])
 
-    trip_table = Table(table_data, colWidths=col_widths, repeatRows=1)
-    trip_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), dark),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,0), 8),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('ALIGN', (5,1), (-1,-1), 'RIGHT'),
-        ('FONTSIZE', (0,1), (-1,-2), 8),
-        ('ROWBACKGROUNDS', (0,1), (-1,-2), [colors.white, light_gray]),
-        ('GRID', (0,0), (-1,-2), 0.3, colors.HexColor("#dddddd")),
-        ('LINEABOVE', (0,-1), (-1,-1), 1.5, gold),
-        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor("#1a1a2e")),
-        ('TEXTCOLOR', (0,-1), (-1,-1), colors.white),
-        ('FONTNAME', (0,-1), (-1,-1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,-1), (-1,-1), 9),
-        ('TOPPADDING', (0,0), (-1,-1), 5),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    trip_tbl = Table(rows, colWidths=col_w, repeatRows=1)
+    n = len(rows)
+    trip_tbl.setStyle(TableStyle([
+        # Header
+        ('BACKGROUND',   (0,0),  (-1,0),  DARK),
+        ('TOPPADDING',   (0,0),  (-1,0),  6),
+        ('BOTTOMPADDING',(0,0),  (-1,0),  6),
+        # Data rows alternating
+        ('ROWBACKGROUNDS',(0,1), (-1,n-2), [WHITE, LGRAY]),
+        ('TOPPADDING',   (0,1),  (-1,-2), 5),
+        ('BOTTOMPADDING',(0,1),  (-1,-2), 5),
+        ('LEFTPADDING',  (0,0),  (-1,-1), 4),
+        ('RIGHTPADDING', (0,0),  (-1,-1), 4),
+        # Grid on data rows
+        ('LINEBELOW',    (0,0),  (-1,-2), 0.3, colors.HexColor("#dddddd")),
+        # Grand total row
+        ('BACKGROUND',   (0,-1), (-1,-1), DARK),
+        ('TOPPADDING',   (0,-1), (-1,-1), 7),
+        ('BOTTOMPADDING',(0,-1), (-1,-1), 7),
+        ('LINEABOVE',    (0,-1), (-1,-1), 2, GOLD),
+        # Span grand total label across cols 4-8
+        ('SPAN',         (4,-1), (8,-1)),
+        ('ALIGN',        (4,-1), (8,-1), 'RIGHT'),
     ]))
-    story.append(trip_table)
+    story.append(trip_tbl)
     story.append(Spacer(1, 20))
 
-    # Footer
-    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cccccc")))
-    story.append(Spacer(1, 8))
-    footer = Paragraph(
-        "Thank you for choosing Executive Limo. Payment is due within 30 days. "
+    # ── FOOTER ──
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc"), spaceAfter=6))
+    story.append(Paragraph(
+        "Thank you for choosing us. Payment is due within 30 days. "
         "Please reference your invoice number on all payments.",
-        ParagraphStyle('foot', fontSize=8, textColor=colors.HexColor("#666666"),
-                        fontName='Helvetica', alignment=TA_CENTER)
-    )
-    story.append(footer)
+        style('foot', fontSize=8, textColor=colors.HexColor("#888"), fontName='Helvetica', alignment=TA_CENTER)
+    ))
 
     doc.build(story)
     buffer.seek(0)
     return buffer.read()
 
-# ── Streamlit UI ──────────────────────────────────────────
+# ── APP ───────────────────────────────────────────────────
 init_db()
-st.set_page_config(page_title="Executive Limo CRM", page_icon="🚗", layout="wide")
+st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
 
 st.markdown("""
 <style>
 [data-testid="stSidebar"] { background: #1a1a2e; }
 [data-testid="stSidebar"] * { color: #f0f0f0 !important; }
-[data-testid="stSidebar"] .stRadio label { color: #f0f0f0 !important; }
 .metric-card {
-    background: linear-gradient(135deg, #1a1a2e, #16213e);
-    border-radius: 12px; padding: 20px; color: white;
-    border-left: 4px solid #B8860B;
+    background: linear-gradient(135deg,#1a1a2e,#16213e);
+    border-radius:12px; padding:20px; color:white;
+    border-left:4px solid #B8860B; margin-bottom:8px;
 }
-.metric-value { font-size: 2rem; font-weight: bold; color: #B8860B; }
-.metric-label { font-size: 0.85rem; color: #aaaaaa; margin-top: 4px; }
-h1, h2, h3 { color: #1a1a2e; }
-.stButton > button {
-    background: #1a1a2e; color: white; border-radius: 8px;
-    border: 1px solid #B8860B;
-}
-.stButton > button:hover { background: #B8860B; color: white; }
+.metric-value { font-size:2rem; font-weight:bold; color:#B8860B; }
+.metric-label { font-size:0.85rem; color:#aaa; margin-top:4px; }
+.stButton>button { background:#1a1a2e; color:white; border-radius:8px; border:1px solid #B8860B; }
+.stButton>button:hover { background:#B8860B; }
 </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("## 🚗 Executive Limo")
+    st.markdown("## 🚗 Limo CRM")
     st.markdown("---")
     page = st.radio("Navigation", [
-        "📊 Dashboard",
-        "👥 Clients",
-        "🗺️ Trips",
-        "📄 Invoices",
+        "📊 Dashboard", "👥 Clients", "🗺️ Trips", "📄 Invoices", "⚙️ Settings"
     ])
 
 page_name = page.split(" ", 1)[1]
@@ -269,18 +328,14 @@ if page_name == "Dashboard":
     revenue    = conn.execute("SELECT COALESCE(SUM(grand_total),0) FROM invoices").fetchone()[0]
     conn.close()
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1,c2,c3,c4 = st.columns(4)
     def metric(col, label, value):
-        col.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value">{value}</div>
-            <div class="metric-label">{label}</div>
-        </div>""", unsafe_allow_html=True)
+        col.markdown(f'<div class="metric-card"><div class="metric-value">{value}</div><div class="metric-label">{label}</div></div>', unsafe_allow_html=True)
 
-    metric(c1, "Total Clients",   n_clients)
-    metric(c2, "Total Trips",     n_trips)
-    metric(c3, "Total Invoices",  n_invoices)
-    metric(c4, "Total Revenue",   f"${revenue:,.2f}")
+    metric(c1,"Total Clients", n_clients)
+    metric(c2,"Total Trips", n_trips)
+    metric(c3,"Total Invoices", n_invoices)
+    metric(c4,"Total Revenue", f"${revenue:,.2f}")
 
     st.markdown("---")
     conn = get_conn()
@@ -306,7 +361,7 @@ elif page_name == "Clients":
         acc = next_account_number()
         st.info(f"Account Number will be: **{acc}**")
         with st.form("add_client"):
-            c1, c2 = st.columns(2)
+            c1,c2 = st.columns(2)
             name    = c1.text_input("Client Name *")
             company = c2.text_input("Company Name")
             phone   = c1.text_input("Phone")
@@ -320,21 +375,19 @@ elif page_name == "Clients":
                     conn = get_conn()
                     conn.execute(
                         "INSERT INTO clients (account_number,client_name,company_name,phone,email,address,notes) VALUES(?,?,?,?,?,?,?)",
-                        (acc, name, company, phone, email, address, notes)
+                        (acc,name,company,phone,email,address,notes)
                     )
                     conn.commit(); conn.close()
                     st.success(f"Client **{name}** added with account **{acc}**!")
                     st.rerun()
 
     with tab2:
-        st.subheader("Search & Edit Clients")
         search = st.text_input("Search by name, company, or account number")
         conn = get_conn()
         if search:
             df = pd.read_sql(
                 "SELECT * FROM clients WHERE client_name LIKE ? OR company_name LIKE ? OR account_number LIKE ?",
-                conn, params=(f"%{search}%",)*3
-            )
+                conn, params=(f"%{search}%",)*3)
         else:
             df = pd.read_sql("SELECT * FROM clients ORDER BY id DESC LIMIT 20", conn)
         conn.close()
@@ -342,23 +395,23 @@ elif page_name == "Clients":
         for _, row in df.iterrows():
             with st.expander(f"**{row['account_number']}** — {row['client_name']} | {row.get('company_name','')}"):
                 with st.form(f"edit_{row['id']}"):
-                    c1, c2 = st.columns(2)
+                    c1,c2 = st.columns(2)
                     name    = c1.text_input("Client Name", row['client_name'])
                     company = c2.text_input("Company", row.get('company_name','') or '')
                     phone   = c1.text_input("Phone", row.get('phone','') or '')
                     email   = c2.text_input("Email", row.get('email','') or '')
                     address = st.text_input("Address", row.get('address','') or '')
                     notes   = st.text_area("Notes", row.get('notes','') or '', height=70)
-                    col_a, col_b = st.columns(2)
-                    if col_a.form_submit_button("💾 Update"):
+                    ca, cb  = st.columns(2)
+                    if ca.form_submit_button("💾 Update"):
                         conn = get_conn()
                         conn.execute(
                             "UPDATE clients SET client_name=?,company_name=?,phone=?,email=?,address=?,notes=? WHERE id=?",
-                            (name, company, phone, email, address, notes, row['id'])
+                            (name,company,phone,email,address,notes,row['id'])
                         )
                         conn.commit(); conn.close()
                         st.success("Updated!"); st.rerun()
-                    if col_b.form_submit_button("🗑️ Delete", type="secondary"):
+                    if cb.form_submit_button("🗑️ Delete"):
                         conn = get_conn()
                         conn.execute("DELETE FROM clients WHERE id=?", (row['id'],))
                         conn.commit(); conn.close()
@@ -366,9 +419,9 @@ elif page_name == "Clients":
 
     with tab3:
         conn = get_conn()
-        all_clients = pd.read_sql("SELECT account_number,client_name,company_name,phone,email FROM clients ORDER BY id DESC", conn)
+        all_c = pd.read_sql("SELECT account_number,client_name,company_name,phone,email FROM clients ORDER BY id DESC", conn)
         conn.close()
-        st.dataframe(all_clients, use_container_width=True, hide_index=True)
+        st.dataframe(all_c, use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════
 # TRIPS
@@ -379,19 +432,18 @@ elif page_name == "Trips":
 
     with tab1:
         conn = get_conn()
-        clients = pd.read_sql("SELECT id, account_number, client_name FROM clients ORDER BY client_name", conn)
+        clients = pd.read_sql("SELECT id,account_number,client_name FROM clients ORDER BY client_name", conn)
         conn.close()
-
         if clients.empty:
             st.warning("No clients yet. Please add a client first.")
         else:
-            client_options = {f"{r['account_number']} — {r['client_name']}": r['id'] for _, r in clients.iterrows()}
-            selected = st.selectbox("Select Client *", list(client_options.keys()))
-            client_id = client_options[selected]
+            opts = {f"{r['account_number']} — {r['client_name']}": r['id'] for _,r in clients.iterrows()}
+            sel  = st.selectbox("Select Client *", list(opts.keys()))
+            cid  = opts[sel]
 
             with st.form("add_trip"):
                 st.subheader("Trip Details")
-                c1, c2 = st.columns(2)
+                c1,c2 = st.columns(2)
                 conf_num   = c1.text_input("Confirmation Number")
                 passenger  = c2.text_input("Passenger Name")
                 svc_type   = c1.selectbox("Service Type", ["Airport Transfer","Point-to-Point","As Directed","Other"])
@@ -404,12 +456,12 @@ elif page_name == "Trips":
                 driver     = st.text_input("Driver Name")
 
                 st.subheader("Charges")
-                c1, c2, c3, c4 = st.columns(4)
-                base   = c1.number_input("Base Rate ($)", min_value=0.0, step=0.01)
-                grat   = c2.number_input("Gratuity ($)",  min_value=0.0, step=0.01)
-                fuel   = c3.number_input("Fuel Charge ($)", min_value=0.0, step=0.01)
-                misc   = c4.number_input("Misc Charge ($)", min_value=0.0, step=0.01)
-                total  = base + grat + fuel + misc
+                c1,c2,c3,c4 = st.columns(4)
+                base  = c1.number_input("Base Rate ($)",   min_value=0.0, step=0.01)
+                grat  = c2.number_input("Gratuity ($)",    min_value=0.0, step=0.01)
+                fuel  = c3.number_input("Fuel Charge ($)", min_value=0.0, step=0.01)
+                misc  = c4.number_input("Misc ($)",        min_value=0.0, step=0.01)
+                total = base + grat + fuel + misc
                 st.metric("Trip Total", f"${total:.2f}")
 
                 if st.form_submit_button("✅ Save Trip", use_container_width=True):
@@ -420,59 +472,44 @@ elif page_name == "Trips":
                          pickup_date,pickup_time,pickup_location,dropoff_location,stops,driver_name,
                          base_rate,gratuity,fuel_charge,misc_charge,trip_total)
                         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """, (client_id, conf_num, passenger, svc_type, veh_type,
-                          str(pickup_dt), str(pickup_tm), pickup_loc, dropoff, stops, driver,
-                          base, grat, fuel, misc, total))
+                    """, (cid,conf_num,passenger,svc_type,veh_type,
+                          str(pickup_dt),str(pickup_tm),pickup_loc,dropoff,stops,driver,
+                          base,grat,fuel,misc,total))
                     conn.commit(); conn.close()
-                    st.success(f"Trip saved! Total: **${total:.2f}**")
-                    st.rerun()
+                    st.success(f"Trip saved! Total: **${total:.2f}**"); st.rerun()
 
     with tab2:
         conn = get_conn()
-        clients = pd.read_sql("SELECT id, account_number, client_name FROM clients ORDER BY client_name", conn)
+        clients = pd.read_sql("SELECT id,account_number,client_name FROM clients ORDER BY client_name", conn)
         conn.close()
-
         if not clients.empty:
-            client_opts = {"— All Clients —": None} | {f"{r['account_number']} — {r['client_name']}": r['id'] for _, r in clients.iterrows()}
-            sel = st.selectbox("Filter by Client", list(client_opts.keys()))
-            cid = client_opts[sel]
-
+            opts = {"— All Clients —": None} | {f"{r['account_number']} — {r['client_name']}": r['id'] for _,r in clients.iterrows()}
+            sel  = st.selectbox("Filter by Client", list(opts.keys()))
+            cid  = opts[sel]
             conn = get_conn()
-            if cid:
-                trips_df = pd.read_sql("""
-                    SELECT t.id, c.account_number, c.client_name, t.confirmation_number,
-                           t.passenger_name, t.service_type, t.pickup_date, t.pickup_location,
-                           t.dropoff_location, t.trip_total
-                    FROM trips t JOIN clients c ON t.client_id=c.id
-                    WHERE t.client_id=? ORDER BY t.pickup_date DESC
-                """, conn, params=(cid,))
-            else:
-                trips_df = pd.read_sql("""
-                    SELECT t.id, c.account_number, c.client_name, t.confirmation_number,
-                           t.passenger_name, t.service_type, t.pickup_date, t.pickup_location,
-                           t.dropoff_location, t.trip_total
-                    FROM trips t JOIN clients c ON t.client_id=c.id
-                    ORDER BY t.pickup_date DESC LIMIT 50
-                """, conn)
+            q = """SELECT t.id,c.account_number,c.client_name,t.confirmation_number,
+                          t.passenger_name,t.service_type,t.pickup_date,
+                          t.pickup_location,t.dropoff_location,t.trip_total
+                   FROM trips t JOIN clients c ON t.client_id=c.id """
+            trips_df = pd.read_sql(q + ("WHERE t.client_id=? ORDER BY t.pickup_date DESC" if cid else "ORDER BY t.pickup_date DESC LIMIT 50"),
+                                   conn, params=(cid,) if cid else ())
             conn.close()
-
             if trips_df.empty:
                 st.info("No trips found.")
             else:
                 for _, row in trips_df.iterrows():
                     with st.expander(f"📅 {row['pickup_date']} — {row['passenger_name']} | {row['service_type']} | ${row['trip_total']:.2f}"):
-                        col1, col2, col3 = st.columns(3)
-                        col1.write(f"**Account:** {row['account_number']}")
-                        col2.write(f"**Client:** {row['client_name']}")
-                        col3.write(f"**Conf #:** {row.get('confirmation_number','')}")
-                        col1.write(f"**Pickup:** {row['pickup_location']}")
-                        col2.write(f"**Drop-off:** {row['dropoff_location']}")
-                        col3.write(f"**Total:** ${row['trip_total']:.2f}")
-                        if st.button("🗑️ Delete Trip", key=f"del_trip_{row['id']}"):
+                        c1,c2,c3 = st.columns(3)
+                        c1.write(f"**Account:** {row['account_number']}")
+                        c2.write(f"**Client:** {row['client_name']}")
+                        c3.write(f"**Conf #:** {row.get('confirmation_number','')}")
+                        c1.write(f"**Pickup:** {row['pickup_location']}")
+                        c2.write(f"**Drop-off:** {row['dropoff_location']}")
+                        c3.write(f"**Total:** ${row['trip_total']:.2f}")
+                        if st.button("🗑️ Delete Trip", key=f"dt_{row['id']}"):
                             conn = get_conn()
                             conn.execute("DELETE FROM trips WHERE id=?", (row['id'],))
-                            conn.commit(); conn.close()
-                            st.rerun()
+                            conn.commit(); conn.close(); st.rerun()
 
 # ══════════════════════════════════════════
 # INVOICES
@@ -481,51 +518,62 @@ elif page_name == "Invoices":
     st.title("📄 Invoice Management")
     tab1, tab2 = st.tabs(["🧾 Generate Invoice", "📚 Invoice History"])
 
+    # Load saved logo & company info
+    logo_bytes = None
+    logo_b64 = get_setting("logo_b64")
+    if logo_b64:
+        import base64
+        try:
+            logo_bytes = base64.b64decode(logo_b64)
+        except:
+            logo_bytes = None
+
+    company_info = {
+        "name":    get_setting("co_name",    "EXECUTIVE LIMO"),
+        "tagline": get_setting("co_tagline", "Premium Chauffeur Services"),
+        "address": get_setting("co_address", "123 Luxury Drive, Beverly Hills, CA 90210"),
+        "phone":   get_setting("co_phone",   "(310) 555-0100"),
+        "email":   get_setting("co_email",   "billing@executivelimo.com"),
+    }
+
     with tab1:
         conn = get_conn()
         clients = pd.read_sql("SELECT * FROM clients ORDER BY client_name", conn)
         conn.close()
-
         if clients.empty:
             st.warning("No clients yet.")
         else:
-            client_opts = {f"{r['account_number']} — {r['client_name']}": r['id'] for _, r in clients.iterrows()}
-            selected = st.selectbox("Select Client", list(client_opts.keys()))
-            client_id = client_opts[selected]
+            opts = {f"{r['account_number']} — {r['client_name']}": r['id'] for _,r in clients.iterrows()}
+            selected = st.selectbox("Select Client", list(opts.keys()))
+            client_id = opts[selected]
 
             conn = get_conn()
-            client_row = conn.execute("SELECT * FROM clients WHERE id=?", (client_id,)).fetchone()
-            client_keys = [d[0] for d in conn.execute("SELECT * FROM clients WHERE id=?", (client_id,)).description]
-            client_dict = dict(zip(client_keys, client_row))
-
-            trips_df = pd.read_sql("""
-                SELECT * FROM trips WHERE client_id=? ORDER BY pickup_date
-            """, conn, params=(client_id,))
+            row = conn.execute("SELECT * FROM clients WHERE id=?", (client_id,)).fetchone()
+            cols = [d[0] for d in conn.execute("SELECT * FROM clients WHERE id=?", (client_id,)).description]
+            client_dict = dict(zip(cols, row))
+            trips_df = pd.read_sql("SELECT * FROM trips WHERE client_id=? ORDER BY pickup_date", conn, params=(client_id,))
             conn.close()
 
             if trips_df.empty:
                 st.warning("This client has no trips. Add trips first.")
             else:
                 st.subheader("Select Trips to Include")
-                trip_labels = [
-                    f"{r['pickup_date']} — {r['passenger_name']} — ${r['trip_total']:.2f}"
-                    for _, r in trips_df.iterrows()
-                ]
-                selected_trips = st.multiselect("Trips", trip_labels, default=trip_labels)
-                selected_idx = [trip_labels.index(t) for t in selected_trips]
-                selected_trips_df = trips_df.iloc[selected_idx]
+                labels = [f"{r['pickup_date']} — {r['passenger_name']} — ${r['trip_total']:.2f}" for _,r in trips_df.iterrows()]
+                chosen = st.multiselect("Trips", labels, default=labels)
+                idxs   = [labels.index(t) for t in chosen]
+                sel_df = trips_df.iloc[idxs]
 
-                if not selected_trips_df.empty:
-                    grand_total = selected_trips_df['trip_total'].sum()
+                if not sel_df.empty:
+                    grand_total = sel_df['trip_total'].sum()
                     st.metric("Grand Total", f"${grand_total:.2f}")
-
                     inv_date = st.date_input("Invoice Date", value=date.today())
 
                     if st.button("🖨️ Generate & Save Invoice", use_container_width=True, type="primary"):
-                        inv_num = next_invoice_number()
-                        trips_list = selected_trips_df.to_dict('records')
+                        inv_num   = next_invoice_number()
                         pdf_bytes = generate_invoice_pdf(
-                            client_dict, trips_list, inv_num, str(inv_date), grand_total
+                            client_dict, sel_df.to_dict('records'),
+                            inv_num, str(inv_date), grand_total,
+                            logo_bytes=logo_bytes, company_info=company_info
                         )
                         conn = get_conn()
                         conn.execute(
@@ -534,51 +582,85 @@ elif page_name == "Invoices":
                         )
                         conn.commit(); conn.close()
                         st.success(f"Invoice **{inv_num}** generated!")
-                        st.download_button(
-                            "⬇️ Download PDF", data=pdf_bytes,
-                            file_name=f"{inv_num}.pdf", mime="application/pdf"
-                        )
+                        st.download_button("⬇️ Download PDF", data=pdf_bytes,
+                                           file_name=f"{inv_num}.pdf", mime="application/pdf")
 
     with tab2:
-        st.subheader("Invoice History")
-        search = st.text_input("Search by invoice #, client name, or account")
+        search = st.text_input("Search by invoice #, client, or account")
         conn = get_conn()
-        if search:
-            inv_df = pd.read_sql("""
-                SELECT i.id, i.invoice_number, c.account_number, c.client_name,
-                       i.invoice_date, i.grand_total
-                FROM invoices i JOIN clients c ON i.client_id=c.id
-                WHERE i.invoice_number LIKE ? OR c.client_name LIKE ? OR c.account_number LIKE ?
-                ORDER BY i.id DESC
-            """, conn, params=(f"%{search}%",)*3)
-        else:
-            inv_df = pd.read_sql("""
-                SELECT i.id, i.invoice_number, c.account_number, c.client_name,
-                       i.invoice_date, i.grand_total
-                FROM invoices i JOIN clients c ON i.client_id=c.id
-                ORDER BY i.id DESC
-            """, conn)
+        base_q = """SELECT i.id,i.invoice_number,c.account_number,c.client_name,i.invoice_date,i.grand_total
+                    FROM invoices i JOIN clients c ON i.client_id=c.id """
+        inv_df = pd.read_sql(
+            base_q + ("WHERE i.invoice_number LIKE ? OR c.client_name LIKE ? OR c.account_number LIKE ? ORDER BY i.id DESC" if search
+                      else "ORDER BY i.id DESC"),
+            conn, params=(f"%{search}%",)*3 if search else ()
+        )
         conn.close()
-
         if inv_df.empty:
             st.info("No invoices yet.")
         else:
             for _, row in inv_df.iterrows():
                 with st.expander(f"**{row['invoice_number']}** — {row['client_name']} — {row['invoice_date']} — ${row['grand_total']:.2f}"):
                     st.write(f"**Account:** {row['account_number']}")
-                    col_a, col_b = st.columns(2)
-                    # Download
+                    ca, cb = st.columns(2)
                     conn = get_conn()
                     pdf_row = conn.execute("SELECT pdf_data FROM invoices WHERE id=?", (row['id'],)).fetchone()
                     conn.close()
                     if pdf_row and pdf_row[0]:
-                        col_a.download_button(
-                            "⬇️ Download PDF", data=bytes(pdf_row[0]),
-                            file_name=f"{row['invoice_number']}.pdf",
-                            mime="application/pdf", key=f"dl_{row['id']}"
-                        )
-                    if col_b.button("🗑️ Delete Invoice", key=f"del_inv_{row['id']}"):
+                        ca.download_button("⬇️ Download PDF", data=bytes(pdf_row[0]),
+                                           file_name=f"{row['invoice_number']}.pdf",
+                                           mime="application/pdf", key=f"dl_{row['id']}")
+                    if cb.button("🗑️ Delete", key=f"di_{row['id']}"):
                         conn = get_conn()
                         conn.execute("DELETE FROM invoices WHERE id=?", (row['id'],))
-                        conn.commit(); conn.close()
-                        st.rerun()
+                        conn.commit(); conn.close(); st.rerun()
+
+# ══════════════════════════════════════════
+# SETTINGS
+# ══════════════════════════════════════════
+elif page_name == "Settings":
+    st.title("⚙️ Company Settings")
+    st.info("These details appear on every invoice you generate.")
+
+    import base64
+
+    # Logo upload
+    st.subheader("🖼️ Company Logo")
+    current_logo = get_setting("logo_b64")
+    if current_logo:
+        try:
+            st.image(base64.b64decode(current_logo), width=200)
+            st.caption("Current logo")
+        except:
+            pass
+
+    uploaded = st.file_uploader("Upload your logo (PNG or JPG)", type=["png","jpg","jpeg"])
+    if uploaded:
+        logo_b64 = base64.b64encode(uploaded.read()).decode()
+        set_setting("logo_b64", logo_b64)
+        st.success("✅ Logo saved!")
+        st.rerun()
+
+    if current_logo:
+        if st.button("🗑️ Remove Logo"):
+            set_setting("logo_b64", "")
+            st.rerun()
+
+    st.markdown("---")
+    st.subheader("🏢 Company Information")
+
+    with st.form("company_settings"):
+        co_name    = st.text_input("Company Name",   get_setting("co_name",    "EXECUTIVE LIMO"))
+        co_tagline = st.text_input("Tagline",        get_setting("co_tagline", "Premium Chauffeur Services"))
+        co_address = st.text_input("Address",        get_setting("co_address", "123 Luxury Drive, Beverly Hills, CA 90210"))
+        c1, c2 = st.columns(2)
+        co_phone   = c1.text_input("Phone",          get_setting("co_phone",   "(310) 555-0100"))
+        co_email   = c2.text_input("Email",          get_setting("co_email",   "billing@executivelimo.com"))
+
+        if st.form_submit_button("💾 Save Settings", use_container_width=True):
+            set_setting("co_name",    co_name)
+            set_setting("co_tagline", co_tagline)
+            set_setting("co_address", co_address)
+            set_setting("co_phone",   co_phone)
+            set_setting("co_email",   co_email)
+            st.success("✅ Settings saved! All future invoices will use this info.")
