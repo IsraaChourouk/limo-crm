@@ -10,7 +10,12 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.units import inch
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 import io
+from supabase import create_client
 
+SUPABASE_URL = "https://urgotpfzfuydxaklopnp.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZ290cGZ6ZnV5ZHhha2xvcG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyMzI4MDUsImV4cCI6MjA5NzgwODgwNX0.ovytSOtNYvhYHUA1rrXCti4XCzatIXtawYwljgq9iRE"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ── DB ────────────────────────────────────────────────────
 DB_PATH = "limo_crm.db"
 
