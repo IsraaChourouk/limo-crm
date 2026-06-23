@@ -234,24 +234,154 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
 st.markdown("""
 <style>
-[data-testid="stSidebar"] { background: #1a1a2e; }
-[data-testid="stSidebar"] * { color: #f0f0f0 !important; }
-.metric-card {
-    background: linear-gradient(135deg,#1a1a2e,#16213e);
-    border-radius:12px; padding:20px; color:white;
-    border-left:4px solid #B8860B; margin-bottom:8px;
+/* ── Global ── */
+html, body, [data-testid="stAppViewContainer"] {
+    background-color: #0f0f0f !important;
+    color: #f0f0f0;
 }
-.metric-value { font-size:2rem; font-weight:bold; color:#B8860B; }
-.metric-label { font-size:0.85rem; color:#aaa; margin-top:4px; }
-.stButton>button { background:#1a1a2e; color:white; border-radius:8px; border:1px solid #B8860B; }
-.stButton>button:hover { background:#B8860B; }
+[data-testid="stMain"] { background-color: #0f0f0f !important; }
+[data-testid="block-container"] { padding-top: 1.5rem !important; }
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: #1a1a1a !important;
+    border-right: 1px solid #2a2a2a;
+}
+[data-testid="stSidebar"] * { color: #f0f0f0 !important; }
+[data-testid="stSidebar"] .stRadio > label { display: none; }
+[data-testid="stSidebar"] .stRadio div[role="radiogroup"] { gap: 4px; display: flex; flex-direction: column; }
+[data-testid="stSidebar"] .stRadio label {
+    display: flex !important; align-items: center;
+    padding: 10px 16px; border-radius: 10px;
+    cursor: pointer; font-size: 0.95rem;
+    transition: background 0.2s;
+}
+[data-testid="stSidebar"] .stRadio label:hover { background: #2a2a2a !important; }
+[data-testid="stSidebar"] .stRadio input:checked + div { color: #e8b84b !important; }
+
+/* ── Quick Stat cards ── */
+.qs-card {
+    background: #1c1c1c;
+    border-radius: 16px;
+    padding: 20px 18px;
+    display: flex; flex-direction: column;
+    border: 1px solid #2a2a2a;
+    position: relative; overflow: hidden;
+    min-height: 110px;
+}
+.qs-card.urgent { border-color: #e8b84b; }
+.qs-label { font-size: 0.78rem; color: #888; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; }
+.qs-value { font-size: 2.2rem; font-weight: 800; color: #ffffff; line-height: 1; }
+.qs-sub   { font-size: 0.78rem; color: #666; margin-top: 6px; }
+.qs-icon  { position: absolute; right: 16px; top: 50%; transform: translateY(-50%); font-size: 2rem; opacity: 0.18; }
+.qs-card.urgent .qs-label { color: #e8b84b; }
+.qs-card.urgent .qs-value { color: #e8b84b; }
+
+/* ── Section title ── */
+.section-title {
+    font-size: 1.15rem; font-weight: 700;
+    color: #ffffff; margin: 28px 0 14px 0;
+    letter-spacing: 0.01em;
+}
+
+/* ── Trip cards ── */
+.trip-card {
+    background: #1c1c1c;
+    border-radius: 16px;
+    padding: 18px;
+    border: 1px solid #2a2a2a;
+    margin-bottom: 12px;
+    position: relative;
+}
+.trip-card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+.badge {
+    background: #e8b84b; color: #000;
+    font-size: 0.7rem; font-weight: 800;
+    padding: 4px 10px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.05em;
+}
+.badge.red { background: #ff4444; color: #fff; }
+.pickup-time { font-size: 0.8rem; color: #aaa; }
+.pickup-time span { font-weight: 700; color: #fff; font-size: 1rem; }
+.trip-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #2a2a2a; border-radius: 8px;
+    padding: 4px 10px; font-size: 0.75rem; color: #ccc;
+    margin-bottom: 8px;
+}
+.trip-field-label { font-size: 0.68rem; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+.trip-field-value { font-size: 0.95rem; font-weight: 700; color: #fff; }
+
+/* ── Ongoing trip row ── */
+.ongoing-row {
+    background: #1c1c1c; border-radius: 12px;
+    padding: 14px 16px; margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: space-between;
+    border: 1px solid #2a2a2a;
+}
+.ongoing-info { display: flex; align-items: center; gap: 12px; }
+.ongoing-dot { width: 36px; height: 36px; background: #2a2a2a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; }
+.ongoing-main { font-size: 0.9rem; font-weight: 700; color: #fff; }
+.ongoing-sub  { font-size: 0.75rem; color: #666; }
+.en-route-badge {
+    background: #1a1a1a; border: 1px solid #e8b84b;
+    color: #e8b84b; font-size: 0.7rem; font-weight: 700;
+    padding: 5px 12px; border-radius: 8px; letter-spacing: 0.06em;
+}
+
+/* ── Greeting ── */
+.greeting-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+}
+.greeting-text { font-size: 1.4rem; font-weight: 800; color: #fff; }
+.greeting-sub  { font-size: 0.85rem; color: #666; margin-top: 2px; }
+
+/* ── Buttons ── */
+.stButton>button {
+    background: #e8b84b; color: #000;
+    border-radius: 10px; border: none;
+    font-weight: 700; padding: 10px 20px;
+}
+.stButton>button:hover { background: #f5c842; color: #000; }
+
+/* ── Inputs ── */
+.stTextInput input, .stTextArea textarea, .stSelectbox div {
+    background: #1c1c1c !important;
+    border: 1px solid #2a2a2a !important;
+    color: #fff !important; border-radius: 10px !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+    border-color: #e8b84b !important;
+    box-shadow: 0 0 0 2px rgba(232,184,75,0.15) !important;
+}
+
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] { background: #1c1c1c; border-radius: 10px; padding: 4px; }
+.stTabs [data-baseweb="tab"] { color: #888; border-radius: 8px; }
+.stTabs [aria-selected="true"] { background: #e8b84b !important; color: #000 !important; font-weight: 700; }
+
+/* ── Dataframe ── */
+[data-testid="stDataFrame"] { background: #1c1c1c; border-radius: 12px; }
+
+/* ── Expander ── */
+.streamlit-expanderHeader { background: #1c1c1c !important; border-radius: 10px; color: #fff !important; }
+details { background: #1c1c1c; border-radius: 10px; border: 1px solid #2a2a2a !important; }
+
+/* ── Hide Streamlit default elements ── */
+#MainMenu, footer, header { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("## 🚗 Limo CRM")
-    st.markdown("---")
-    page = st.radio("Navigation", [
+    st.markdown("""
+    <div style="padding: 20px 8px 10px 8px;">
+        <div style="font-size:1.3rem; font-weight:800; color:#e8b84b; margin-bottom:4px;">🚗 Limo CRM</div>
+        <div style="font-size:0.75rem; color:#555;">Management System</div>
+    </div>
+    <hr style="border-color:#2a2a2a; margin: 8px 0 16px 0;">
+    """, unsafe_allow_html=True)
+    page = st.radio("Menu", [
         "📊 Dashboard", "👥 Clients", "🗺️ Trips", "📄 Invoices", "⚙️ Settings"
     ])
 
@@ -261,35 +391,113 @@ page_name = page.split(" ", 1)[1]
 # DASHBOARD
 # ══════════════════════════════════════════
 if page_name == "Dashboard":
-    st.title("📊 Dashboard")
 
+    # ── Data ──
     n_clients  = len(sb.table("clients").select("id").execute().data)
     n_trips    = len(sb.table("trips").select("id").execute().data)
     n_invoices = len(sb.table("invoices").select("id").execute().data)
     inv_data   = sb.table("invoices").select("grand_total").execute().data
     revenue    = sum(r["grand_total"] or 0 for r in inv_data)
+    recent_trips = sb.table("trips").select("*, clients(client_name, account_number)").order("id", desc=True).limit(5).execute().data
+    recent_invoices = sb.table("invoices").select("*, clients(client_name)").order("id", desc=True).limit(5).execute().data
 
-    c1,c2,c3,c4 = st.columns(4)
-    def metric(col, label, value):
-        col.markdown(
-            f'<div class="metric-card"><div class="metric-value">{value}</div>'
-            f'<div class="metric-label">{label}</div></div>',
-            unsafe_allow_html=True)
+    # ── Greeting ──
+    st.markdown("""
+    <div class="greeting-bar">
+        <div>
+            <div class="greeting-text">👋 Welcome back!</div>
+            <div class="greeting-sub">Here's what's happening today</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    metric(c1, "Total Clients",  n_clients)
-    metric(c2, "Total Trips",    n_trips)
-    metric(c3, "Total Invoices", n_invoices)
-    metric(c4, "Total Revenue",  f"${revenue:,.2f}")
+    # ── Quick Stats ──
+    st.markdown('<div class="section-title">Quick Stats</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.markdown(f"""
+    <div class="qs-card">
+        <div class="qs-label">Total Clients</div>
+        <div class="qs-value">{n_clients}</div>
+        <div class="qs-sub">Registered accounts</div>
+        <div class="qs-icon">👥</div>
+    </div>""", unsafe_allow_html=True)
+    c2.markdown(f"""
+    <div class="qs-card">
+        <div class="qs-label">Total Trips</div>
+        <div class="qs-value">{n_trips}</div>
+        <div class="qs-sub">All time trips logged</div>
+        <div class="qs-icon">🗺️</div>
+    </div>""", unsafe_allow_html=True)
+    c3.markdown(f"""
+    <div class="qs-card">
+        <div class="qs-label">Total Invoices</div>
+        <div class="qs-value">{n_invoices}</div>
+        <div class="qs-sub">Generated invoices</div>
+        <div class="qs-icon">📄</div>
+    </div>""", unsafe_allow_html=True)
+    c4.markdown(f"""
+    <div class="qs-card urgent">
+        <div class="qs-label">Total Revenue</div>
+        <div class="qs-value">${revenue:,.0f}</div>
+        <div class="qs-sub">From all invoices</div>
+        <div class="qs-icon">💰</div>
+    </div>""", unsafe_allow_html=True)
 
-    st.markdown("---")
-    recent = sb.table("invoices").select("invoice_number, invoice_date, grand_total, client_id, clients(client_name)").order("id", desc=True).limit(5).execute().data
-    if recent:
-        st.subheader("Recent Invoices")
-        rows = [{"Invoice #": r["invoice_number"],
-                 "Client":    r["clients"]["client_name"] if r.get("clients") else "",
-                 "Date":      r["invoice_date"],
-                 "Total":     f"${r['grand_total']:.2f}"} for r in recent]
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # ── Recent Trips ──
+    col_left, col_right = st.columns([1.1, 0.9])
+
+    with col_left:
+        st.markdown('<div class="section-title">Recent Trips</div>', unsafe_allow_html=True)
+        if not recent_trips:
+            st.markdown('<div class="trip-card"><div style="color:#555;text-align:center;padding:20px;">No trips yet</div></div>', unsafe_allow_html=True)
+        for t in recent_trips:
+            cl = t.get("clients") or {}
+            svc_icon = "✈️" if "Airport" in (t.get("service_type") or "") else "🚗"
+            st.markdown(f"""
+            <div class="trip-card">
+                <div class="trip-card-top">
+                    <span class="badge">{"Airport" if "Airport" in (t.get("service_type") or "") else t.get("service_type","Trip")}</span>
+                    <div class="pickup-time">📅 <span>{t.get("pickup_date","")}</span></div>
+                </div>
+                <div class="trip-tag">{svc_icon} {t.get("pickup_location","—")}</div>
+                <div style="display:flex; gap:32px; margin-top:10px;">
+                    <div>
+                        <div class="trip-field-label">Passenger</div>
+                        <div class="trip-field-value">{t.get("passenger_name","—")}</div>
+                    </div>
+                    <div>
+                        <div class="trip-field-label">Vehicle</div>
+                        <div class="trip-field-value">{t.get("vehicle_type","—")}</div>
+                    </div>
+                    <div>
+                        <div class="trip-field-label">Total</div>
+                        <div class="trip-field-value" style="color:#e8b84b;">${t.get("trip_total",0):.2f}</div>
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # ── Recent Invoices ──
+    with col_right:
+        st.markdown('<div class="section-title">Recent Invoices</div>', unsafe_allow_html=True)
+        if not recent_invoices:
+            st.markdown('<div class="ongoing-row"><span style="color:#555;">No invoices yet</span></div>', unsafe_allow_html=True)
+        for inv in recent_invoices:
+            cl = inv.get("clients") or {}
+            st.markdown(f"""
+            <div class="ongoing-row">
+                <div class="ongoing-info">
+                    <div class="ongoing-dot">📄</div>
+                    <div>
+                        <div class="ongoing-main">{cl.get("client_name","—")}</div>
+                        <div class="ongoing-sub">{inv.get("invoice_number","")} &nbsp;·&nbsp; {inv.get("invoice_date","")}</div>
+                    </div>
+                </div>
+                <div class="en-route-badge">${inv.get("grand_total",0):,.2f}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════
 # CLIENTS
