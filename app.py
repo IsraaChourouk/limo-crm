@@ -233,17 +233,18 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
 
+st.markdown(
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">',
+    unsafe_allow_html=True
+)
 st.markdown("""
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
 [data-testid="block-container"] { padding-top: 1.5rem !important; }
-
 [data-testid="stSidebar"] { background: var(--color-background-secondary) !important; border-right: 0.5px solid var(--color-border-tertiary); }
 [data-testid="stSidebar"] .stRadio > label { display: none; }
 [data-testid="stSidebar"] .stRadio div[role="radiogroup"] { gap: 4px; display: flex; flex-direction: column; }
 [data-testid="stSidebar"] .stRadio label { display: flex !important; align-items: center; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
 [data-testid="stSidebar"] .stRadio label:hover { background: var(--color-background-primary) !important; }
-
 .stButton>button { border-radius: 8px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-primary); }
 .stButton>button:hover { background: var(--color-background-primary); }
 .stTabs [data-baseweb="tab-list"] { background: var(--color-background-secondary); border-radius: 8px; padding: 4px; }
