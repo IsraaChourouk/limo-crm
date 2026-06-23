@@ -232,197 +232,64 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 
 # ── Page config ───────────────────────────────────────────
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
-
-st.markdown(
-    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">',
-    unsafe_allow_html=True
-)
 st.markdown("""
 <style>
-[data-testid="block-container"] { padding-top: 1.5rem !important; }
-[data-testid="stSidebar"] { background: var(--color-background-secondary) !important; border-right: 0.5px solid var(--color-border-tertiary); }
-[data-testid="stSidebar"] .stRadio > label { display: none; }
-[data-testid="stSidebar"] .stRadio div[role="radiogroup"] { gap: 4px; display: flex; flex-direction: column; }
-[data-testid="stSidebar"] .stRadio label { display: flex !important; align-items: center; padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 0.9rem; }
-[data-testid="stSidebar"] .stRadio label:hover { background: var(--color-background-primary) !important; }
-.stButton>button { border-radius: 8px; border: 0.5px solid var(--color-border-secondary); background: var(--color-background-secondary); color: var(--color-text-primary); }
-.stButton>button:hover { background: var(--color-background-primary); }
-.stTabs [data-baseweb="tab-list"] { background: var(--color-background-secondary); border-radius: 8px; padding: 4px; }
-.stTabs [aria-selected="true"] { background: var(--color-background-primary) !important; border-radius: 6px; }
-#MainMenu, footer, header { visibility: hidden; }
+[data-testid="stSidebar"] { background: #1a1a2e; }
+[data-testid="stSidebar"] * { color: #f0f0f0 !important; }
+.metric-card {
+    background: linear-gradient(135deg,#1a1a2e,#16213e);
+    border-radius:12px; padding:20px; color:white;
+    border-left:4px solid #B8860B; margin-bottom:8px;
+}
+.metric-value { font-size:2rem; font-weight:bold; color:#B8860B; }
+.metric-label { font-size:0.85rem; color:#aaa; margin-top:4px; }
+.stButton>button { background:#1a1a2e; color:white; border-radius:8px; border:1px solid #B8860B; }
+.stButton>button:hover { background:#B8860B; }
 </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("""
-    <div style="padding:20px 8px 12px 8px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-            <i class="ti ti-car" style="font-size:20px;color:#185FA5;" aria-hidden="true"></i>
-            <span style="font-size:1.05rem;font-weight:500;color:var(--color-text-primary);">Limo CRM</span>
-        </div>
-        <div style="font-size:0.72rem;color:var(--color-text-secondary);padding-left:28px;">Management system</div>
-    </div>
-    <hr style="border:none;border-top:0.5px solid var(--color-border-tertiary);margin:0 0 12px 0;">
-    """, unsafe_allow_html=True)
-    page = st.radio("Menu", [
-        "Dashboard", "Clients", "Trips", "Invoices", "Settings"
-    ], format_func=lambda x: {
-        "Dashboard": "  Dashboard",
-        "Clients":   "  Clients",
-        "Trips":     "  Trips",
-        "Invoices":  "  Invoices",
-        "Settings":  "  Settings",
-    }[x])
+    st.markdown("## 🚗 Limo CRM")
+    st.markdown("---")
+    page = st.radio("Navigation", [
+        "📊 Dashboard", "👥 Clients", "🗺️ Trips", "📄 Invoices", "⚙️ Settings"
+    ])
 
-page_name = page
+page_name = page.split(" ", 1)[1]
 
 # ══════════════════════════════════════════
 # DASHBOARD
 # ══════════════════════════════════════════
 if page_name == "Dashboard":
+    st.title("📊 Dashboard")
 
-    n_clients       = len(sb.table("clients").select("id").execute().data)
-    n_trips         = len(sb.table("trips").select("id").execute().data)
-    n_invoices      = len(sb.table("invoices").select("id").execute().data)
-    inv_data        = sb.table("invoices").select("grand_total").execute().data
-    revenue         = sum(r["grand_total"] or 0 for r in inv_data)
-    recent_trips    = sb.table("trips").select("*, clients(client_name,account_number)").order("id", desc=True).limit(5).execute().data
-    recent_invoices = sb.table("invoices").select("*, clients(client_name)").order("id", desc=True).limit(5).execute().data
+    n_clients  = len(sb.table("clients").select("id").execute().data)
+    n_trips    = len(sb.table("trips").select("id").execute().data)
+    n_invoices = len(sb.table("invoices").select("id").execute().data)
+    inv_data   = sb.table("invoices").select("grand_total").execute().data
+    revenue    = sum(r["grand_total"] or 0 for r in inv_data)
 
-    # Greeting + action buttons
-    from datetime import datetime
-    today_str = datetime.today().strftime("%A, %d %B %Y")
-    col_greet, col_btns = st.columns([2, 1])
-    col_greet.markdown(f"""
-    <div style="padding:4px 0 16px 0;">
-        <p style="font-size:12px;color:var(--color-text-secondary);margin:0 0 2px 0;">{today_str}</p>
-        <p style="font-size:20px;font-weight:500;margin:0;color:var(--color-text-primary);">Welcome back</p>
-    </div>""", unsafe_allow_html=True)
-    with col_btns:
-        st.markdown("<div style='padding-top:8px;'></div>", unsafe_allow_html=True)
-        b1, b2 = st.columns(2)
-        if b1.button("+ New trip", use_container_width=True):
-            st.session_state["_nav"] = "Trips"
-            st.rerun()
-        if b2.button("+ Invoice", use_container_width=True):
-            st.session_state["_nav"] = "Invoices"
-            st.rerun()
+    c1,c2,c3,c4 = st.columns(4)
+    def metric(col, label, value):
+        col.markdown(
+            f'<div class="metric-card"><div class="metric-value">{value}</div>'
+            f'<div class="metric-label">{label}</div></div>',
+            unsafe_allow_html=True)
 
-    # Stat cards
-    c1, c2, c3, c4 = st.columns(4)
-    def stat_card(col, label, value, icon, bg, icon_color):
-        col.markdown(f"""
-        <div style="background:var(--color-background-secondary);border-radius:8px;padding:1rem;">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                <span style="font-size:12px;color:var(--color-text-secondary);font-weight:500;">{label}</span>
-                <span style="background:{bg};border-radius:6px;padding:5px 6px;display:flex;align-items:center;">
-                    <i class="ti ti-{icon}" style="font-size:14px;color:{icon_color};" aria-hidden="true"></i>
-                </span>
-            </div>
-            <p style="font-size:24px;font-weight:500;margin:0;color:var(--color-text-primary);">{value}</p>
-        </div>""", unsafe_allow_html=True)
+    metric(c1, "Total Clients",  n_clients)
+    metric(c2, "Total Trips",    n_trips)
+    metric(c3, "Total Invoices", n_invoices)
+    metric(c4, "Total Revenue",  f"${revenue:,.2f}")
 
-    stat_card(c1, "Total clients",  n_clients,            "users",           "#E6F1FB", "#185FA5")
-    stat_card(c2, "Total trips",    n_trips,               "route",           "#EAF3DE", "#3B6D11")
-    stat_card(c3, "Invoices",       n_invoices,            "file-text",       "#FAEEDA", "#854F0B")
-    stat_card(c4, "Revenue",        f"${revenue:,.0f}",    "currency-dollar", "#E1F5EE", "#0F6E56")
-
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-
-    # Two-column layout
-    col_left, col_right = st.columns([1.2, 0.8])
-
-    with col_left:
-        st.markdown("""<p style="font-size:15px;font-weight:500;margin:0 0 12px 0;color:var(--color-text-primary);">Recent trips</p>""", unsafe_allow_html=True)
-
-        # Table header
-        st.markdown("""
-        <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;">
-        <div style="display:grid;grid-template-columns:1fr 1fr 0.65fr 0.55fr;gap:8px;padding:10px 16px;border-bottom:0.5px solid var(--color-border-tertiary);">
-            <span style="font-size:11px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Passenger</span>
-            <span style="font-size:11px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Route</span>
-            <span style="font-size:11px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;">Service</span>
-            <span style="font-size:11px;color:var(--color-text-secondary);font-weight:500;text-transform:uppercase;letter-spacing:.04em;text-align:right;">Total</span>
-        </div>""", unsafe_allow_html=True)
-
-        if not recent_trips:
-            st.markdown("""<div style="padding:24px 16px;text-align:center;color:var(--color-text-secondary);font-size:13px;">No trips yet</div>""", unsafe_allow_html=True)
-        else:
-            for i, t in enumerate(recent_trips):
-                name    = t.get("passenger_name") or "—"
-                initials = "".join(p[0].upper() for p in name.split()[:2]) if name != "—" else "?"
-                route   = f"{t.get('pickup_location','?')} → {t.get('dropoff_location','?')}"
-                svc     = t.get("service_type") or "—"
-                total   = t.get("trip_total") or 0
-                border  = "border-bottom:0.5px solid var(--color-border-tertiary);" if i < len(recent_trips)-1 else ""
-                if "Airport" in svc:
-                    badge_bg, badge_color, svc_label, icon = "#E6F1FB","#185FA5","Airport","ti-plane"
-                elif "Point" in svc:
-                    badge_bg, badge_color, svc_label, icon = "#EAF3DE","#3B6D11","P2P","ti-map-pin"
-                else:
-                    badge_bg, badge_color, svc_label, icon = "#FAEEDA","#854F0B","Directed","ti-steering-wheel"
-                av_colors = [("#E6F1FB","#185FA5"),("#EAF3DE","#3B6D11"),("#FAEEDA","#854F0B"),("#E1F5EE","#0F6E56"),("#EEEDFE","#534AB7")]
-                av_bg, av_fg = av_colors[i % len(av_colors)]
-                st.markdown(f"""
-                <div style="display:grid;grid-template-columns:1fr 1fr 0.65fr 0.55fr;gap:8px;padding:12px 16px;align-items:center;{border}">
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div style="width:28px;height:28px;border-radius:50%;background:{av_bg};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:{av_fg};flex-shrink:0;">{initials}</div>
-                        <span style="font-size:13px;color:var(--color-text-primary);">{name}</span>
-                    </div>
-                    <span style="font-size:12px;color:var(--color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{route}</span>
-                    <span style="background:{badge_bg};color:{badge_color};font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;width:fit-content;">
-                        <i class="ti {icon}" style="font-size:11px;" aria-hidden="true"></i> {svc_label}
-                    </span>
-                    <span style="font-size:13px;font-weight:500;color:var(--color-text-primary);text-align:right;">${total:.2f}</span>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col_right:
-        # Recent invoices
-        st.markdown("""<p style="font-size:15px;font-weight:500;margin:0 0 12px 0;color:var(--color-text-primary);">Recent invoices</p>""", unsafe_allow_html=True)
-        st.markdown("""<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;">""", unsafe_allow_html=True)
-        if not recent_invoices:
-            st.markdown("""<div style="padding:24px 16px;text-align:center;color:var(--color-text-secondary);font-size:13px;">No invoices yet</div>""", unsafe_allow_html=True)
-        else:
-            for i, inv in enumerate(recent_invoices):
-                cl     = inv.get("clients") or {}
-                border = "border-bottom:0.5px solid var(--color-border-tertiary);" if i < len(recent_invoices)-1 else ""
-                st.markdown(f"""
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;{border}">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <span style="width:32px;height:32px;border-radius:8px;background:#FAEEDA;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                            <i class="ti ti-file-text" style="font-size:15px;color:#854F0B;" aria-hidden="true"></i>
-                        </span>
-                        <div>
-                            <p style="font-size:13px;font-weight:500;margin:0;color:var(--color-text-primary);">{cl.get("client_name","—")}</p>
-                            <p style="font-size:11px;color:var(--color-text-secondary);margin:2px 0 0 0;">{inv.get("invoice_number","")} &middot; {inv.get("invoice_date","")}</p>
-                        </div>
-                    </div>
-                    <span style="background:#EAF3DE;color:#3B6D11;font-size:12px;font-weight:500;padding:3px 10px;border-radius:4px;">${inv.get("grand_total",0):,.2f}</span>
-                </div>""", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Quick actions
-        st.markdown("""<p style="font-size:15px;font-weight:500;margin:16px 0 12px 0;color:var(--color-text-primary);">Quick actions</p>""", unsafe_allow_html=True)
-        st.markdown("""<div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;overflow:hidden;">""", unsafe_allow_html=True)
-        actions = [
-            ("ti-user-plus",     "#185FA5", "#E6F1FB", "Add new client",     "Clients"),
-            ("ti-map-pin-plus",  "#3B6D11", "#EAF3DE", "Log a trip",         "Trips"),
-            ("ti-file-invoice",  "#854F0B", "#FAEEDA", "Generate invoice",   "Invoices"),
-        ]
-        for i, (icon, ic, bg, label, nav) in enumerate(actions):
-            border = "border-bottom:0.5px solid var(--color-border-tertiary);" if i < len(actions)-1 else ""
-            st.markdown(f"""
-            <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;{border}cursor:pointer;">
-                <span style="width:30px;height:30px;border-radius:6px;background:{bg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-                    <i class="ti {icon}" style="font-size:15px;color:{ic};" aria-hidden="true"></i>
-                </span>
-                <span style="font-size:13px;color:var(--color-text-primary);">{label}</span>
-                <i class="ti ti-arrow-right" style="font-size:13px;color:var(--color-text-secondary);margin-left:auto;" aria-hidden="true"></i>
-            </div>""", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
+    st.markdown("---")
+    recent = sb.table("invoices").select("invoice_number, invoice_date, grand_total, client_id, clients(client_name)").order("id", desc=True).limit(5).execute().data
+    if recent:
+        st.subheader("Recent Invoices")
+        rows = [{"Invoice #": r["invoice_number"],
+                 "Client":    r["clients"]["client_name"] if r.get("clients") else "",
+                 "Date":      r["invoice_date"],
+                 "Total":     f"${r['grand_total']:.2f}"} for r in recent]
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 # ══════════════════════════════════════════
 # CLIENTS
