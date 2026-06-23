@@ -351,6 +351,8 @@ elif page_name == "Clients":
                         errors = []
                         validate_required(name,    "Client Name",     errors)
                         validate_required(address, "Billing Address", errors)
+                        validate_required(phone,   "Phone",           errors)
+                        validate_required(email,   "Email",           errors)
                         if phone and not validate_phone(phone):
                             errors.append("⚠️ **Phone** format is invalid. Use digits only, e.g. +1 310 555 0100")
                         if email and not validate_email(email):
