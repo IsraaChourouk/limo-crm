@@ -47,6 +47,31 @@ def get_setting(key, default=""):
 def set_setting(key, value):
     sb.table("settings").upsert({"key": key, "value": value}).execute()
 
+
+# ── Validation ────────────────────────────────────────────
+import re
+
+def validate_email(email):
+    if not email:
+        return True
+    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email.strip()))
+
+def validate_phone(phone):
+    if not phone:
+        return True
+    digits = re.sub(r"[\s\(\)\-\+\.]", "", phone)
+    return digits.isdigit() and 7 <= len(digits) <= 15
+
+def validate_required(value, label, errors):
+    if not str(value).strip():
+        errors.append(f"⚠️ **{label}** is required.")
+
+def show_errors(errors):
+    if errors:
+        st.warning("\n\n".join(errors))
+        return True
+    return False
+
 # ── PDF ───────────────────────────────────────────────────
 def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand_total,
                           logo_bytes=None, company_info=None):
@@ -279,22 +304,27 @@ elif page_name == "Clients":
         st.info(f"Account Number will be: **{acc}**")
         with st.form("add_client"):
             c1,c2  = st.columns(2)
-            name    = c1.text_input("Client Name *")
-            company = c2.text_input("Company Name")
-            phone   = c1.text_input("Phone")
-            email   = c2.text_input("Email")
-            address = st.text_input("Billing Address")
+            name    = c1.text_input("Client Name *",     placeholder="e.g. John Smith")
+            company = c2.text_input("Company Name",      placeholder="e.g. ABC Corp")
+            phone   = c1.text_input("Phone",             placeholder="e.g. +1 310 555 0100")
+            email   = c2.text_input("Email",             placeholder="e.g. john@email.com")
+            address = st.text_input("Billing Address *", placeholder="e.g. 123 Main St, Los Angeles, CA")
             notes   = st.text_area("Notes", height=80)
             if st.form_submit_button("✅ Save Client", use_container_width=True):
-                if not name:
-                    st.error("Client name is required.")
-                else:
+                errors = []
+                validate_required(name,    "Client Name",     errors)
+                validate_required(address, "Billing Address", errors)
+                if phone and not validate_phone(phone):
+                    errors.append("⚠️ **Phone** format is invalid. Use digits only, e.g. +1 310 555 0100")
+                if email and not validate_email(email):
+                    errors.append("⚠️ **Email** format is invalid. Use format: name@example.com")
+                if not show_errors(errors):
                     sb.table("clients").insert({
-                        "account_number": acc, "client_name": name,
-                        "company_name": company, "phone": phone,
-                        "email": email, "address": address, "notes": notes
+                        "account_number": acc, "client_name": name.strip(),
+                        "company_name": company.strip(), "phone": phone.strip(),
+                        "email": email.strip(), "address": address.strip(), "notes": notes.strip()
                     }).execute()
-                    st.success(f"Client **{name}** added with account **{acc}**!")
+                    st.success(f"✅ Client **{name}** added with account **{acc}**!")
                     st.rerun()
 
     with tab2:
@@ -318,12 +348,20 @@ elif page_name == "Clients":
                     notes   = st.text_area("Notes",         row.get('notes','') or '', height=70)
                     ca, cb  = st.columns(2)
                     if ca.form_submit_button("💾 Update"):
-                        sb.table("clients").update({
-                            "client_name": name, "company_name": company,
-                            "phone": phone, "email": email,
-                            "address": address, "notes": notes
-                        }).eq("id", row['id']).execute()
-                        st.success("Updated!"); st.rerun()
+                        errors = []
+                        validate_required(name,    "Client Name",     errors)
+                        validate_required(address, "Billing Address", errors)
+                        if phone and not validate_phone(phone):
+                            errors.append("⚠️ **Phone** format is invalid. Use digits only, e.g. +1 310 555 0100")
+                        if email and not validate_email(email):
+                            errors.append("⚠️ **Email** format is invalid. Use format: name@example.com")
+                        if not show_errors(errors):
+                            sb.table("clients").update({
+                                "client_name": name.strip(), "company_name": company.strip(),
+                                "phone": phone.strip(), "email": email.strip(),
+                                "address": address.strip(), "notes": notes.strip()
+                            }).eq("id", row['id']).execute()
+                            st.success("✅ Updated!"); st.rerun()
                     if cb.form_submit_button("🗑️ Delete"):
                         sb.table("clients").delete().eq("id", row['id']).execute()
                         st.warning("Deleted."); st.rerun()
@@ -376,34 +414,43 @@ elif page_name == "Trips":
 
                 submitted = st.form_submit_button("✅ Save Trip", use_container_width=True)
                 if submitted:
-                    import time
-                    now      = time.time()
-                    trip_sig = f"{cid}|{conf_num}|{passenger}|{pickup_dt}|{base}|{grat}|{fuel}|{misc}"
-                    already  = (st.session_state.get("last_trip_sig") == trip_sig and
-                                now - st.session_state.get("last_trip_save", 0) < 5)
-                    if already:
-                        st.warning("⚠️ This trip was already saved. Change the details to add another.")
+                    errors = []
+                    validate_required(passenger,  "Passenger Name",   errors)
+                    validate_required(pickup_loc, "Pickup Location",  errors)
+                    validate_required(dropoff,    "Drop-off Location",errors)
+                    validate_required(veh_type,   "Vehicle Type",     errors)
+                    if base == 0:
+                        errors.append("⚠️ **Base Rate** must be greater than $0.00")
+                    if show_errors(errors):
+                        pass
                     else:
-                        st.session_state["last_trip_save"] = now
-                        st.session_state["last_trip_sig"]  = trip_sig
-                        sb.table("trips").insert({
-                            "client_id": cid,
-                            "confirmation_number": conf_num,
-                            "passenger_name": passenger,
-                            "service_type": svc_type,
-                            "vehicle_type": veh_type,
-                            "pickup_date": str(pickup_dt),
-                            "pickup_time": str(pickup_tm),
-                            "pickup_location": pickup_loc,
-                            "dropoff_location": dropoff,
-                            "stops": stops,
-                            "driver_name": driver,
-                            "base_rate": base, "gratuity": grat,
-                            "fuel_charge": fuel, "misc_charge": misc,
-                            "trip_total": total
-                        }).execute()
-                        st.success(f"✅ Trip saved! Total: **${total:.2f}**")
-                        st.rerun()
+                        now      = time.time()
+                        trip_sig = f"{cid}|{conf_num}|{passenger}|{pickup_dt}|{base}|{grat}|{fuel}|{misc}"
+                        already  = (st.session_state.get("last_trip_sig") == trip_sig and
+                                    now - st.session_state.get("last_trip_save", 0) < 5)
+                        if already:
+                            st.warning("⚠️ This trip was already saved. Change the details to add another.")
+                        else:
+                            st.session_state["last_trip_save"] = now
+                            st.session_state["last_trip_sig"]  = trip_sig
+                            sb.table("trips").insert({
+                                "client_id": cid,
+                                "confirmation_number": conf_num,
+                                "passenger_name": passenger,
+                                "service_type": svc_type,
+                                "vehicle_type": veh_type,
+                                "pickup_date": str(pickup_dt),
+                                "pickup_time": str(pickup_tm),
+                                "pickup_location": pickup_loc,
+                                "dropoff_location": dropoff,
+                                "stops": stops,
+                                "driver_name": driver,
+                                "base_rate": base, "gratuity": grat,
+                                "fuel_charge": fuel, "misc_charge": misc,
+                                "trip_total": total
+                            }).execute()
+                            st.success(f"✅ Trip saved! Total: **${total:.2f}**")
+                            st.rerun()
 
     with tab2:
         clients = sb.table("clients").select("id,account_number,client_name").order("client_name").execute().data
