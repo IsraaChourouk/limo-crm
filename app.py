@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+import time
 import io
 import base64
 from supabase import create_client, Client
