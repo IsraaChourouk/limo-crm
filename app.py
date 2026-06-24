@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
-import time
 import io
 import base64
+import re
+import time
 from supabase import create_client, Client
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -48,10 +49,7 @@ def get_setting(key, default=""):
 def set_setting(key, value):
     sb.table("settings").upsert({"key": key, "value": value}).execute()
 
-
 # ── Validation ────────────────────────────────────────────
-import re
-
 def validate_email(email):
     if not email:
         return True
@@ -98,7 +96,6 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 
     story = []
 
-    # ── Header ──
     if logo_bytes:
         logo_img = RLImage(io.BytesIO(logo_bytes), width=1.4*inch, height=1.0*inch)
         logo_img.hAlign = 'LEFT'
@@ -140,13 +137,11 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
     story.append(hdr)
     story.append(HRFlowable(width="100%", thickness=2, color=GOLD, spaceAfter=10))
 
-    # ── Bill To ──
     lbl  = S('lbl', fontSize=7,  textColor=colors.HexColor("#999"), fontName='Helvetica-Bold', spaceAfter=3)
     bval = S('bv',  fontSize=11, textColor=DARK, fontName='Helvetica-Bold', spaceAfter=2)
     val  = S('v',   fontSize=9,  textColor=DARK, fontName='Helvetica', spaceAfter=1)
 
-    bill = [Paragraph("BILL TO", lbl),
-            Paragraph(client.get('client_name',''), bval)]
+    bill = [Paragraph("BILL TO", lbl), Paragraph(client.get('client_name',''), bval)]
     for field in ['company_name','phone','email','address']:
         if client.get(field):
             bill.append(Paragraph(client[field], val))
@@ -162,7 +157,6 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
     story.append(bt)
     story.append(Spacer(1, 12))
 
-    # ── Trip Table ──
     headers   = ['Date','Conf #','Passenger','Service Type','Vehicle',
                  'Base Rate','Gratuity','Fuel Charge','Misc','Total']
     col_widths = [0.7*inch, 0.7*inch, 1.0*inch, 1.05*inch, 0.7*inch,
@@ -217,7 +211,6 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
     story.append(tt)
     story.append(Spacer(1, 20))
 
-    # ── Footer ──
     story.append(HRFlowable(width="100%", thickness=0.5,
                             color=colors.HexColor("#cccccc"), spaceAfter=6))
     story.append(Paragraph(
@@ -307,14 +300,16 @@ elif page_name == "Clients":
             c1,c2  = st.columns(2)
             name    = c1.text_input("Client Name *",     placeholder="e.g. John Smith")
             company = c2.text_input("Company Name",      placeholder="e.g. ABC Corp")
-            phone   = c1.text_input("Phone",             placeholder="e.g. +1 310 555 0100")
-            email   = c2.text_input("Email",             placeholder="e.g. john@email.com")
+            phone   = c1.text_input("Phone *",           placeholder="e.g. +1 310 555 0100")
+            email   = c2.text_input("Email *",           placeholder="e.g. john@email.com")
             address = st.text_input("Billing Address *", placeholder="e.g. 123 Main St, Los Angeles, CA")
             notes   = st.text_area("Notes", height=80)
             if st.form_submit_button("✅ Save Client", use_container_width=True):
                 errors = []
                 validate_required(name,    "Client Name",     errors)
                 validate_required(address, "Billing Address", errors)
+                validate_required(phone,   "Phone",           errors)
+                validate_required(email,   "Email",           errors)
                 if phone and not validate_phone(phone):
                     errors.append("⚠️ **Phone** format is invalid. Use digits only, e.g. +1 310 555 0100")
                 if email and not validate_email(email):
@@ -396,13 +391,13 @@ elif page_name == "Trips":
                 st.subheader("Trip Details")
                 c1,c2      = st.columns(2)
                 conf_num   = c1.text_input("Confirmation Number")
-                passenger  = c2.text_input("Passenger Name")
+                passenger  = c2.text_input("Passenger Name *")
                 svc_type   = c1.selectbox("Service Type", ["Airport Transfer","Point-to-Point","As Directed","Other"])
-                veh_type   = c2.text_input("Vehicle Type", placeholder="e.g. Sedan, SUV, Stretch Limo")
+                veh_type   = c2.text_input("Vehicle Type *", placeholder="e.g. Sedan, SUV, Stretch Limo")
                 pickup_dt  = c1.date_input("Pickup Date", value=date.today())
                 pickup_tm  = c2.time_input("Pickup Time")
-                pickup_loc = c1.text_input("Pickup Location")
-                dropoff    = c2.text_input("Drop-off Location")
+                pickup_loc = c1.text_input("Pickup Location *")
+                dropoff    = c2.text_input("Drop-off Location *")
                 stops      = st.text_input("Stops (optional)")
                 driver     = st.text_input("Driver Name")
 
@@ -418,10 +413,10 @@ elif page_name == "Trips":
                 submitted = st.form_submit_button("✅ Save Trip", use_container_width=True)
                 if submitted:
                     errors = []
-                    validate_required(passenger,  "Passenger Name",   errors)
-                    validate_required(pickup_loc, "Pickup Location",  errors)
-                    validate_required(dropoff,    "Drop-off Location",errors)
-                    validate_required(veh_type,   "Vehicle Type",     errors)
+                    validate_required(passenger,  "Passenger Name",    errors)
+                    validate_required(pickup_loc, "Pickup Location",   errors)
+                    validate_required(dropoff,    "Drop-off Location", errors)
+                    validate_required(veh_type,   "Vehicle Type",      errors)
                     if base == 0:
                         errors.append("⚠️ **Base Rate** must be greater than $0.00")
                     if show_errors(errors):
@@ -491,7 +486,6 @@ elif page_name == "Invoices":
     st.title("📄 Invoice Management")
     tab1, tab2 = st.tabs(["🧾 Generate Invoice", "📚 Invoice History"])
 
-    # Load logo & company info from Supabase settings
     logo_bytes = None
     logo_b64   = get_setting("logo_b64")
     if logo_b64:
@@ -517,10 +511,32 @@ elif page_name == "Invoices":
             selected  = st.selectbox("Select Client", list(opts.keys()))
             client    = opts[selected]
 
-            trips = sb.table("trips").select("*").eq("client_id", client['id']).order("pickup_date").execute().data
-            if not trips:
+            # ── Date range filter (always visible) ──
+            st.markdown("#### Filter trips by date range")
+            dr1, dr2, dr3 = st.columns([1, 1, 1])
+            date_from = dr1.date_input("From", value=date(date.today().year, 1, 1), key="inv_from")
+            date_to   = dr2.date_input("To",   value=date.today(),                  key="inv_to")
+
+            if date_from > date_to:
+                st.error("⚠️ 'From' date must be before 'To' date.")
+                st.stop()
+
+            all_trips = sb.table("trips").select("*").eq("client_id", client['id']).order("pickup_date").execute().data
+            trips = [t for t in all_trips
+                     if date_from <= date.fromisoformat(t['pickup_date']) <= date_to]
+
+            total_trips = len(all_trips)
+            filtered    = len(trips)
+            dr3.metric("Trips in range", f"{filtered} / {total_trips}")
+
+            if not all_trips:
                 st.warning("This client has no trips. Add trips first.")
+                st.stop()
+            elif not trips:
+                st.warning(f"No trips found between **{date_from}** and **{date_to}**. Try a wider date range.")
+                st.stop()
             else:
+                st.caption(f"Showing **{filtered}** trip(s) from **{date_from}** to **{date_to}**")
                 st.subheader("Select Trips to Include")
                 labels  = [f"{t['pickup_date']} — {t['passenger_name']} — ${t['trip_total']:.2f}" for t in trips]
                 chosen  = st.multiselect("Trips", labels, default=labels)
@@ -588,7 +604,6 @@ elif page_name == "Settings":
     st.title("⚙️ Company Settings")
     st.info("These details appear on every invoice you generate.")
 
-    # Logo
     st.subheader("🖼️ Company Logo")
     current_logo = get_setting("logo_b64")
     if current_logo:
