@@ -405,7 +405,7 @@ elif page_name == "Trips":
                 passenger  = c2.text_input("Passenger Name *")
                 svc_type   = c1.selectbox("Service Type", ["Airport Transfer","Point-to-Point","As Directed","Other"])
                 veh_type   = c2.text_input("Vehicle Type *", placeholder="e.g. Sedan, SUV, Stretch Limo")
-                pickup_dt  = c1.date_input("Pickup Date", value=date.today())
+                pickup_dt  = c1.date_input("Pickup Date", value=date.today(), format="MM/DD/YYYY")
                 pickup_tm  = c2.time_input("Pickup Time")
                 pickup_loc = c1.text_input("Pickup Location *")
                 dropoff    = c2.text_input("Drop-off Location *")
@@ -525,8 +525,8 @@ elif page_name == "Invoices":
             # ── Date range filter (always visible) ──
             st.markdown("#### Filter trips by date range")
             dr1, dr2, dr3 = st.columns([1, 1, 1])
-            date_from = dr1.date_input("From", value=date(date.today().year, 1, 1), key="inv_from")
-            date_to   = dr2.date_input("To",   value=date.today(),                  key="inv_to")
+            date_from = dr1.date_input("From", value=date(date.today().year, 1, 1), key="inv_from", format="MM/DD/YYYY")
+            date_to   = dr2.date_input("To",   value=date.today(),                  key="inv_to",   format="MM/DD/YYYY")
 
             if date_from > date_to:
                 st.error("⚠️ 'From' date must be before 'To' date.")
