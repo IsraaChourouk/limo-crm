@@ -61,20 +61,26 @@ def set_setting(key, value):
     sb.table("settings").upsert({"key": key, "value": value}).execute()
 
 # ── Duplicate Submit Guard ────────────────────────────────
-def is_duplicate_submit(sig_key, sig_value, window_seconds=5):
+def is_duplicate_submit(sig_key, sig_value, window_seconds=60):
     """
     Returns True if this exact submission (same sig_key + sig_value) was
-    already made within window_seconds. Used to block accidental double
+    already SAVED within window_seconds. Used to block accidental double
     form-submits (double-click, double-tap on mobile, slow network, etc.)
     without blocking legitimate new entries.
+
+    IMPORTANT: this only checks/reports duplicate status. It does NOT
+    record anything. Call mark_submitted() separately, and only after
+    the save has actually happened, so repeated blocked clicks don't
+    keep resetting the timer.
     """
     now = time.time()
-    is_dupe = (st.session_state.get(f"{sig_key}_sig") == sig_value and
-               now - st.session_state.get(f"{sig_key}_time", 0) < window_seconds)
-    if not is_dupe:
-        st.session_state[f"{sig_key}_time"] = now
-        st.session_state[f"{sig_key}_sig"] = sig_value
-    return is_dupe
+    return (st.session_state.get(f"{sig_key}_sig") == sig_value and
+            now - st.session_state.get(f"{sig_key}_time", 0) < window_seconds)
+
+def mark_submitted(sig_key, sig_value):
+    """Record that sig_value was just successfully saved under sig_key."""
+    st.session_state[f"{sig_key}_time"] = time.time()
+    st.session_state[f"{sig_key}_sig"] = sig_value
 
 # ── Validation ────────────────────────────────────────────
 def validate_email(email):
@@ -351,6 +357,7 @@ elif page_name == "Clients":
                             "company_name": company.strip(), "phone": phone.strip(),
                             "email": email.strip(), "address": address.strip(), "notes": notes.strip()
                         }).execute()
+                        mark_submitted("last_client_save", client_sig)
                         st.success(f"✅ Client **{name}** added with account **{acc}**!")
                         st.rerun()
 
@@ -473,6 +480,7 @@ elif page_name == "Trips":
                                 "fuel_charge": fuel, "misc_charge": misc,
                                 "trip_total": total
                             }).execute()
+                            mark_submitted("last_trip_save", trip_sig)
                             st.success(f"✅ Trip saved! Total: **${total:.2f}**")
                             st.rerun()
 
@@ -592,6 +600,7 @@ elif page_name == "Invoices":
                                 "grand_total":    grand_total,
                                 "pdf_data":       pdf_b64
                             }).execute()
+                            mark_submitted("last_invoice_save", inv_sig)
                             st.success(f"✅ Invoice **{inv_num}** generated!")
                             st.download_button("⬇️ Download PDF", data=pdf_bytes,
                                                file_name=f"{inv_num}.pdf", mime="application/pdf")
