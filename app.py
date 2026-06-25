@@ -261,17 +261,58 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
 st.markdown("""
 <style>
-[data-testid="stSidebar"] { background: #1a1a2e; }
-[data-testid="stSidebar"] * { color: #f0f0f0 !important; }
-.metric-card {
-    background: linear-gradient(135deg,#1a1a2e,#16213e);
-    border-radius:12px; padding:20px; color:white;
-    border-left:4px solid #B8860B; margin-bottom:8px;
+:root {
+    --bg: #F8FAFC;
+    --surface: #FFFFFF;
+    --primary: #525252;
+    --primary-dark: #0D0D0D;
+    --accent: #969696;
+    --text: #0F172A;
+    --text-muted: #64748B;
+    --border: #E2E8F0;
+    --radius: 10px;
 }
-.metric-value { font-size:2rem; font-weight:bold; color:#B8860B; }
-.metric-label { font-size:0.85rem; color:#aaa; margin-top:4px; }
-.stButton>button { background:#1a1a2e; color:white; border-radius:8px; border:1px solid #B8860B; }
-.stButton>button:hover { background:#B8860B; }
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+}
+[data-testid="stSidebar"] * {
+    color: var(--text) !important;
+}
+
+/* Cards used in dashboard metrics */
+.metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 8px;
+}
+.metric-value {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+.metric-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* Buttons */
+.stButton > button {
+    background: var(--primary);
+    color: white;
+    border-radius: 8px;
+    border: none;
+    font-weight: 500;
+    transition: background 0.15s ease;
+}
+.stButton > button:hover {
+    background: var(--primary-dark);
+}
 </style>
 """, unsafe_allow_html=True)
 
