@@ -112,8 +112,8 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
                             leftMargin=0.6*inch, rightMargin=0.6*inch,
                             topMargin=0.5*inch, bottomMargin=0.5*inch)
 
-    GOLD  = colors.HexColor("#B8860B")
-    DARK  = colors.HexColor("#1a1a2e")
+    GOLD  = colors.HexColor("#545454")
+    DARK  = colors.HexColor("#000000")
     LGRAY = colors.HexColor("#f7f7f7")
     WHITE = colors.white
 
