@@ -23,6 +23,17 @@ def get_sb() -> Client:
 
 sb = get_sb()
 
+# ── Date Formatting ───────────────────────────────────────
+def fmt_date(iso_str):
+    """Convert ISO date string YYYY-MM-DD → MM/DD/YYYY for display."""
+    if not iso_str:
+        return ""
+    try:
+        d = date.fromisoformat(str(iso_str)[:10])
+        return d.strftime("%m/%d/%Y")
+    except Exception:
+        return str(iso_str)
+
 # ── Helpers ───────────────────────────────────────────────
 def next_account_number():
     r = sb.table("clients").select("account_number").order("id", desc=True).limit(1).execute()
@@ -120,7 +131,7 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
                   S('ih', fontSize=22, textColor=GOLD, fontName='Helvetica-Bold', alignment=TA_RIGHT, spaceAfter=4)),
         Paragraph(f"<b>Invoice #:</b> {invoice_number}",
                   S('i1', fontSize=9, fontName='Helvetica', alignment=TA_RIGHT, spaceAfter=2)),
-        Paragraph(f"<b>Date:</b> {invoice_date}",
+        Paragraph(f"<b>Date:</b> {fmt_date(invoice_date)}",
                   S('i2', fontSize=9, fontName='Helvetica', alignment=TA_RIGHT, spaceAfter=2)),
         Paragraph(f"<b>Account:</b> {client.get('account_number','')}",
                   S('i3', fontSize=9, fontName='Helvetica', alignment=TA_RIGHT)),
@@ -170,7 +181,7 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
     rows = [[Paragraph(h, hs) for h in headers]]
     for t in trips_data:
         rows.append([
-            Paragraph(str(t.get('pickup_date','')),         cs),
+            Paragraph(fmt_date(t.get('pickup_date','')),         cs),  # ← MM/DD/YYYY in PDF
             Paragraph(str(t.get('confirmation_number','')), cs),
             Paragraph(str(t.get('passenger_name','')),      cs),
             Paragraph(str(t.get('service_type','')),        cs),
@@ -281,7 +292,7 @@ if page_name == "Dashboard":
         st.subheader("Recent Invoices")
         rows = [{"Invoice #": r["invoice_number"],
                  "Client":    r["clients"]["client_name"] if r.get("clients") else "",
-                 "Date":      r["invoice_date"],
+                 "Date":      fmt_date(r["invoice_date"]),   # ← MM/DD/YYYY
                  "Total":     f"${r['grand_total']:.2f}"} for r in recent]
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -437,7 +448,7 @@ elif page_name == "Trips":
                                 "passenger_name": passenger,
                                 "service_type": svc_type,
                                 "vehicle_type": veh_type,
-                                "pickup_date": str(pickup_dt),
+                                "pickup_date": str(pickup_dt),   # stored ISO, displayed MM/DD/YYYY
                                 "pickup_time": str(pickup_tm),
                                 "pickup_location": pickup_loc,
                                 "dropoff_location": dropoff,
@@ -467,7 +478,7 @@ elif page_name == "Trips":
             else:
                 for t in trips:
                     cl = t.get("clients") or {}
-                    with st.expander(f"📅 {t['pickup_date']} — {t['passenger_name']} | {t['service_type']} | ${t['trip_total']:.2f}"):
+                    with st.expander(f"📅 {fmt_date(t['pickup_date'])} — {t['passenger_name']} | {t['service_type']} | ${t['trip_total']:.2f}"):
                         c1,c2,c3 = st.columns(3)
                         c1.write(f"**Account:** {cl.get('account_number','')}")
                         c2.write(f"**Client:** {cl.get('client_name','')}")
@@ -533,12 +544,12 @@ elif page_name == "Invoices":
                 st.warning("This client has no trips. Add trips first.")
                 st.stop()
             elif not trips:
-                st.warning(f"No trips found between **{date_from}** and **{date_to}**. Try a wider date range.")
+                st.warning(f"No trips found between **{fmt_date(str(date_from))}** and **{fmt_date(str(date_to))}**. Try a wider date range.")
                 st.stop()
             else:
-                st.caption(f"Showing **{filtered}** trip(s) from **{date_from}** to **{date_to}**")
+                st.caption(f"Showing **{filtered}** trip(s) from **{fmt_date(str(date_from))}** to **{fmt_date(str(date_to))}**")
                 st.subheader("Select Trips to Include")
-                labels  = [f"{t['pickup_date']} — {t['passenger_name']} — ${t['trip_total']:.2f}" for t in trips]
+                labels  = [f"{fmt_date(t['pickup_date'])} — {t['passenger_name']} — ${t['trip_total']:.2f}" for t in trips]
                 chosen  = st.multiselect("Trips", labels, default=labels)
                 sel_idx = [labels.index(l) for l in chosen]
                 sel_trips = [trips[i] for i in sel_idx]
@@ -582,7 +593,7 @@ elif page_name == "Invoices":
         else:
             for row in inv_data:
                 cl = row.get("clients") or {}
-                with st.expander(f"**{row['invoice_number']}** — {cl.get('client_name','')} — {row['invoice_date']} — ${row['grand_total']:.2f}"):
+                with st.expander(f"**{row['invoice_number']}** — {cl.get('client_name','')} — {fmt_date(row['invoice_date'])} — ${row['grand_total']:.2f}"):
                     st.write(f"**Account:** {cl.get('account_number','')}")
                     ca, cb = st.columns(2)
                     if row.get("pdf_data"):
