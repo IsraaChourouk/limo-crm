@@ -60,6 +60,22 @@ def get_setting(key, default=""):
 def set_setting(key, value):
     sb.table("settings").upsert({"key": key, "value": value}).execute()
 
+# ── Duplicate Submit Guard ────────────────────────────────
+def is_duplicate_submit(sig_key, sig_value, window_seconds=5):
+    """
+    Returns True if this exact submission (same sig_key + sig_value) was
+    already made within window_seconds. Used to block accidental double
+    form-submits (double-click, double-tap on mobile, slow network, etc.)
+    without blocking legitimate new entries.
+    """
+    now = time.time()
+    is_dupe = (st.session_state.get(f"{sig_key}_sig") == sig_value and
+               now - st.session_state.get(f"{sig_key}_time", 0) < window_seconds)
+    if not is_dupe:
+        st.session_state[f"{sig_key}_time"] = now
+        st.session_state[f"{sig_key}_sig"] = sig_value
+    return is_dupe
+
 # ── Validation ────────────────────────────────────────────
 def validate_email(email):
     if not email:
@@ -326,13 +342,17 @@ elif page_name == "Clients":
                 if email and not validate_email(email):
                     errors.append("⚠️ **Email** format is invalid. Use format: name@example.com")
                 if not show_errors(errors):
-                    sb.table("clients").insert({
-                        "account_number": acc, "client_name": name.strip(),
-                        "company_name": company.strip(), "phone": phone.strip(),
-                        "email": email.strip(), "address": address.strip(), "notes": notes.strip()
-                    }).execute()
-                    st.success(f"✅ Client **{name}** added with account **{acc}**!")
-                    st.rerun()
+                    client_sig = f"{name.strip()}|{phone.strip()}|{email.strip()}|{address.strip()}"
+                    if is_duplicate_submit("last_client_save", client_sig):
+                        st.warning("⚠️ This client was already saved. Change the details to add another.")
+                    else:
+                        sb.table("clients").insert({
+                            "account_number": acc, "client_name": name.strip(),
+                            "company_name": company.strip(), "phone": phone.strip(),
+                            "email": email.strip(), "address": address.strip(), "notes": notes.strip()
+                        }).execute()
+                        st.success(f"✅ Client **{name}** added with account **{acc}**!")
+                        st.rerun()
 
     with tab2:
         search = st.text_input("Search by name, company, or account number")
@@ -433,15 +453,10 @@ elif page_name == "Trips":
                     if show_errors(errors):
                         pass
                     else:
-                        now      = time.time()
                         trip_sig = f"{cid}|{conf_num}|{passenger}|{pickup_dt}|{base}|{grat}|{fuel}|{misc}"
-                        already  = (st.session_state.get("last_trip_sig") == trip_sig and
-                                    now - st.session_state.get("last_trip_save", 0) < 5)
-                        if already:
+                        if is_duplicate_submit("last_trip_save", trip_sig):
                             st.warning("⚠️ This trip was already saved. Change the details to add another.")
                         else:
-                            st.session_state["last_trip_save"] = now
-                            st.session_state["last_trip_sig"]  = trip_sig
                             sb.table("trips").insert({
                                 "client_id": cid,
                                 "confirmation_number": conf_num,
@@ -560,22 +575,26 @@ elif page_name == "Invoices":
                     inv_date = st.date_input("Invoice Date", value=date.today())
 
                     if st.button("🖨️ Generate & Save Invoice", use_container_width=True, type="primary"):
-                        inv_num   = next_invoice_number()
-                        pdf_bytes = generate_invoice_pdf(
-                            client, sel_trips, inv_num, str(inv_date),
-                            grand_total, logo_bytes=logo_bytes, company_info=company_info
-                        )
-                        pdf_b64 = base64.b64encode(pdf_bytes).decode()
-                        sb.table("invoices").insert({
-                            "invoice_number": inv_num,
-                            "client_id":      client['id'],
-                            "invoice_date":   str(inv_date),
-                            "grand_total":    grand_total,
-                            "pdf_data":       pdf_b64
-                        }).execute()
-                        st.success(f"Invoice **{inv_num}** generated!")
-                        st.download_button("⬇️ Download PDF", data=pdf_bytes,
-                                           file_name=f"{inv_num}.pdf", mime="application/pdf")
+                        inv_sig = f"{client['id']}|{inv_date}|{grand_total}|{','.join(str(t['id']) for t in sel_trips)}"
+                        if is_duplicate_submit("last_invoice_save", inv_sig):
+                            st.warning("⚠️ This invoice was already generated. Change the selection or date to create another.")
+                        else:
+                            inv_num   = next_invoice_number()
+                            pdf_bytes = generate_invoice_pdf(
+                                client, sel_trips, inv_num, str(inv_date),
+                                grand_total, logo_bytes=logo_bytes, company_info=company_info
+                            )
+                            pdf_b64 = base64.b64encode(pdf_bytes).decode()
+                            sb.table("invoices").insert({
+                                "invoice_number": inv_num,
+                                "client_id":      client['id'],
+                                "invoice_date":   str(inv_date),
+                                "grand_total":    grand_total,
+                                "pdf_data":       pdf_b64
+                            }).execute()
+                            st.success(f"✅ Invoice **{inv_num}** generated!")
+                            st.download_button("⬇️ Download PDF", data=pdf_bytes,
+                                               file_name=f"{inv_num}.pdf", mime="application/pdf")
 
     with tab2:
         search = st.text_input("Search by invoice #, client name, or account")
