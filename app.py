@@ -472,7 +472,7 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
         if st.button(label, key=f"nav_{label}", use_container_width=True,
-                     label_visibility="collapsed"):
+                     ):
             st.session_state.page_name = label
             st.rerun()
 
