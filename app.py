@@ -276,7 +276,7 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
 st.markdown("""
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root {
@@ -332,6 +332,24 @@ st.markdown("""
 }
 .stButton > button:hover {
     background: var(--primary-dark);
+}
+/* Hide sidebar nav button text */
+[data-testid="stSidebar"] .stButton > button {
+    position: absolute !important;
+    opacity: 0 !important;
+    height: 1px !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    top: -30px;
+    pointer-events: auto;
+    cursor: pointer;
+}
+[data-testid="stSidebar"] .stButton {
+    position: relative;
+    height: 0 !important;
+    margin: 0 !important;
 }
 /* ── Mobile overrides ─────────────────── */
 @media (max-width: 768px) {
