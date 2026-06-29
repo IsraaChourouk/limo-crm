@@ -275,9 +275,7 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 # ── Page config ───────────────────────────────────────────
 
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
-st.markdown("""
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+st.markdown("""<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
 :root {
     --bg: #F8FAFC;
@@ -433,8 +431,7 @@ st.markdown("""
         font-size: 22px;
     }
 }
-</style>
-""", unsafe_allow_html=True)
+</style>""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("""
