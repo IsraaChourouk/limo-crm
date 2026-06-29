@@ -275,163 +275,35 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
 # ── Page config ───────────────────────────────────────────
 
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
-st.markdown("""<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+st.markdown('<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">', unsafe_allow_html=True)
+st.markdown("""
 <style>
-:root {
-    --bg: #F8FAFC;
-    --surface: #FFFFFF;
-    --primary: #525252;
-    --primary-dark: #0D0D0D;
-    --accent: #969696;
-    --text: #0F172A;
-    --text-muted: #64748B;
-    --border: #E2E8F0;
-    --radius: 10px;
-}
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-}
-[data-testid="stSidebar"] * {
-    color: var(--text) !important;
-}
-
-/* Cards used in dashboard metrics */
-.metric-card {
-    background: #111111;
-    border: 1px solid #2a2a2a;
-    border-radius: 14px;
-    padding: 20px 22px;
-    margin-bottom: 8px;
-}
-.metric-value {
-    font-size: 1.9rem;
-    font-weight: 700;
-    color: #ffffff;
-}
-.metric-label {
-    font-size: 0.82rem;
-    color: #888888;
-    margin-top: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-}
-
-/* Buttons */
-.stButton > button {
-    background: var(--primary);
-    color: white;
-    border-radius: 8px;
-    border: none;
-    font-weight: 500;
-    transition: background 0.15s ease;
-}
-.stButton > button:hover {
-    background: var(--primary-dark);
-}
-/* Hide sidebar nav button text */
-[data-testid="stSidebar"] .stButton > button {
-    position: absolute !important;
-    opacity: 0 !important;
-    height: 1px !important;
-    min-height: 0 !important;
-    width: 100% !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    top: -30px;
-    pointer-events: auto;
-    cursor: pointer;
-}
-[data-testid="stSidebar"] .stButton {
-    position: relative;
-    height: 0 !important;
-    margin: 0 !important;
-}
-/* ── Mobile overrides ─────────────────── */
+:root { --surface: #FFFFFF; --primary: #525252; --primary-dark: #0D0D0D; --text: #0F172A; --border: #E2E8F0; }
+[data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid #E2E8F0; }
+[data-testid="stSidebar"] * { color: #0F172A !important; }
+.metric-card { background: #111111; border: 1px solid #2a2a2a; border-radius: 14px; padding: 20px 22px; margin-bottom: 8px; }
+.metric-value { font-size: 1.9rem; font-weight: 700; color: #ffffff; }
+.metric-label { font-size: 0.82rem; color: #888888; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+.stButton > button { background: #525252; color: white; border-radius: 8px; border: none; font-weight: 500; }
+.stButton > button:hover { background: #0D0D0D; }
+[data-testid="stSidebar"] .stButton > button { position: absolute !important; opacity: 0 !important; height: 1px !important; min-height: 0 !important; width: 100% !important; padding: 0 !important; margin: 0 !important; top: -30px; pointer-events: auto; }
+[data-testid="stSidebar"] .stButton { position: relative; height: 0 !important; margin: 0 !important; }
+.bottom-nav { display: none; }
 @media (max-width: 768px) {
-
-    /* Stack columns vertically on mobile */
-    [data-testid="column"] {
-        min-width: 100% !important;
-        width: 100% !important;
-    }
-
-    /* Bigger touch targets for buttons */
-    .stButton > button {
-        min-height: 48px;
-        font-size: 15px;
-    }
-
-    /* Metric cards slightly smaller on mobile */
-    .metric-card {
-        padding: 14px 16px;
-    }
-    .metric-value {
-        font-size: 1.5rem;
-    }
-
-    /* Hide sidebar on mobile */
-    [data-testid="stSidebar"] {
-        display: none !important;
-    }
-
-    /* Add bottom padding so content isn't hidden behind bottom nav */
-    .main .block-container {
-        padding-bottom: 90px !important;
-    }
-
-    /* Smaller tab labels on mobile */
-    .stTabs [data-baseweb="tab"] {
-        font-size: 13px;
-        padding: 8px 10px;
-    }
-
-    /* Full width selects and inputs */
-    .stSelectbox, .stTextInput, .stTextArea, .stDateInput {
-        width: 100% !important;
-    }
+[data-testid="column"] { min-width: 100% !important; width: 100% !important; }
+.stButton > button { min-height: 48px; font-size: 15px; }
+.metric-card { padding: 14px 16px; }
+.metric-value { font-size: 1.5rem; }
+[data-testid="stSidebar"] { display: none !important; }
+.main .block-container { padding-bottom: 90px !important; }
+.stTabs [data-baseweb="tab"] { font-size: 13px; padding: 8px 10px; }
+.bottom-nav { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: #111111; border-top: 1px solid #2a2a2a; padding: 10px 0 22px; justify-content: space-around; align-items: center; z-index: 9999; }
+.bottom-nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #666666; font-size: 11px; font-weight: 500; cursor: pointer; padding: 4px 12px; }
+.bottom-nav-item.active { color: #ffffff; }
+.bottom-nav-item i { font-size: 22px; }
 }
-
-/* ── Bottom navigation bar ─────────────── */
-.bottom-nav {
-    display: none;
-}
-
-@media (max-width: 768px) {
-    .bottom-nav {
-        display: flex;
-        position: fixed;
-        bottom: 0; left: 0; right: 0;
-        background: #111111;
-        border-top: 1px solid #2a2a2a;
-        padding: 10px 0 22px;
-        justify-content: space-around;
-        align-items: center;
-        z-index: 9999;
-    }
-    .bottom-nav-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        color: #666666;
-        font-size: 11px;
-        font-weight: 500;
-        cursor: pointer;
-        padding: 4px 12px;
-        border-radius: 8px;
-        transition: color 0.15s;
-    }
-    .bottom-nav-item.active {
-        color: #ffffff;
-    }
-    .bottom-nav-item i {
-        font-size: 22px;
-    }
-}
-</style>""", unsafe_allow_html=True)
+</style>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.markdown("""
