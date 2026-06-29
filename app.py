@@ -770,14 +770,7 @@ nav_pages = [
 
 nav_items = ""
 for label, icon in nav_pages:
-    active_class = "active" if current_page == label else ""
-    nav_items += f"""
-    <div class="bottom-nav-item {active_class}" onclick="
-        window.parent.document.querySelectorAll('button[data-testid=\\"baseButton-secondary\\"]')
-        .forEach(b => {{ if(b.innerText === '{label}') b.click(); }});
-    ">
-        <i class="ti ti-{icon}"></i>
-        <span>{label}</span>
-    </div>"""
+    is_active = "active" if current_page == label else ""
+    nav_items += f"""<div class="bottom-nav-item {is_active}" onclick="window.parent.document.querySelectorAll('button').forEach(function(b){{if(b.innerText==='{label}')b.click();}});"><i class="ti ti-{icon}"></i><span>{label}</span></div>"""
 
 st.markdown(f'<div class="bottom-nav">{nav_items}</div>', unsafe_allow_html=True)
