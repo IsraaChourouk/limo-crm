@@ -96,11 +96,26 @@ def validate_phone(phone):
 
 def validate_required(value, label, errors):
     if not str(value).strip():
-        errors.append(f"⚠️ **{label}** is required.")
+        errors.append(f"<b>{label}</b> is required.")
+
+def alert(msg, kind="success"):
+    icons  = {"success": "circle-check", "warning": "alert-triangle", "info": "info-circle", "error": "circle-x"}
+    colors = {"success": "#1a7a4a",      "warning": "#92600a",        "info": "#1a5fa8",     "error": "#9a1f1f"}
+    bgs    = {"success": "#f0faf5",      "warning": "#fdf8ee",        "info": "#eef5fd",     "error": "#fdf0f0"}
+    ico = icons.get(kind, "info-circle")
+    c   = colors.get(kind, "#444")
+    b   = bgs.get(kind, "#fff")
+    st.markdown(f'''
+    <div style="display:flex; align-items:center; gap:12px; padding:13px 16px;
+         background:{b}; border-left:3px solid {c}; border-radius:8px; margin:8px 0;">
+        <i class="ti ti-{ico}" style="font-size:18px; color:{c}; flex-shrink:0;"></i>
+        <span style="font-size:14px; color:{c}; line-height:1.5;">{msg}</span>
+    </div>''', unsafe_allow_html=True)
 
 def show_errors(errors):
     if errors:
-        st.warning("\n\n".join(errors))
+        for e in errors:
+            alert(e, "error")
         return True
     return False
 
@@ -258,8 +273,11 @@ def generate_invoice_pdf(client, trips_data, invoice_number, invoice_date, grand
     return buffer.read()
 
 # ── Page config ───────────────────────────────────────────
+
 st.set_page_config(page_title="Limo CRM", page_icon="🚗", layout="wide")
 st.markdown("""
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 :root {
     --bg: #F8FAFC;
@@ -284,21 +302,23 @@ st.markdown("""
 
 /* Cards used in dashboard metrics */
 .metric-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 20px 24px;
+    background: #111111;
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;
+    padding: 20px 22px;
     margin-bottom: 8px;
 }
 .metric-value {
     font-size: 1.9rem;
     font-weight: 700;
-    color: var(--primary);
+    color: #ffffff;
 }
 .metric-label {
-    font-size: 0.85rem;
-    color: var(--text-muted);
+    font-size: 0.82rem;
+    color: #888888;
     margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
 }
 
 /* Buttons */
@@ -313,23 +333,156 @@ st.markdown("""
 .stButton > button:hover {
     background: var(--primary-dark);
 }
+/* ── Mobile overrides ─────────────────── */
+@media (max-width: 768px) {
+
+    /* Stack columns vertically on mobile */
+    [data-testid="column"] {
+        min-width: 100% !important;
+        width: 100% !important;
+    }
+
+    /* Bigger touch targets for buttons */
+    .stButton > button {
+        min-height: 48px;
+        font-size: 15px;
+    }
+
+    /* Metric cards slightly smaller on mobile */
+    .metric-card {
+        padding: 14px 16px;
+    }
+    .metric-value {
+        font-size: 1.5rem;
+    }
+
+    /* Hide sidebar on mobile */
+    [data-testid="stSidebar"] {
+        display: none !important;
+    }
+
+    /* Add bottom padding so content isn't hidden behind bottom nav */
+    .main .block-container {
+        padding-bottom: 90px !important;
+    }
+
+    /* Smaller tab labels on mobile */
+    .stTabs [data-baseweb="tab"] {
+        font-size: 13px;
+        padding: 8px 10px;
+    }
+
+    /* Full width selects and inputs */
+    .stSelectbox, .stTextInput, .stTextArea, .stDateInput {
+        width: 100% !important;
+    }
+}
+
+/* ── Bottom navigation bar ─────────────── */
+.bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        background: #111111;
+        border-top: 1px solid #2a2a2a;
+        padding: 10px 0 22px;
+        justify-content: space-around;
+        align-items: center;
+        z-index: 9999;
+    }
+    .bottom-nav-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        color: #666666;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        padding: 4px 12px;
+        border-radius: 8px;
+        transition: color 0.15s;
+    }
+    .bottom-nav-item.active {
+        color: #ffffff;
+    }
+    .bottom-nav-item i {
+        font-size: 22px;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
 with st.sidebar:
-    st.markdown("## 🚗 Limo CRM")
-    st.markdown("---")
-    page = st.radio("Navigation", [
-        "📊 Dashboard", "👥 Clients", "🗺️ Trips", "📄 Invoices", "⚙️ Settings"
-    ])
+    st.markdown("""
+    <div style="padding: 10px 0 20px;">
+        <div style="display:flex; align-items:center; gap:10px; padding: 0 8px 16px;">
+            <i class="ti ti-car" style="font-size:26px; color:#525252;"></i>
+            <span style="font-size:18px; font-weight:600; color:var(--text);">Limo CRM</span>
+        </div>
+        <hr style="border:none; border-top:1px solid #E2E8F0; margin-bottom:16px;">
+    </div>
+    """, unsafe_allow_html=True)
 
-page_name = page.split(" ", 1)[1]
+    pages = [
+        ("Dashboard", "layout-dashboard"),
+        ("Clients",   "users"),
+        ("Trips",     "map-pin"),
+        ("Invoices",  "file-invoice"),
+        ("Settings",  "settings"),
+    ]
+
+    if "page_name" not in st.session_state:
+        st.session_state.page_name = "Dashboard"
+
+    for label, icon in pages:
+        is_active = st.session_state.page_name == label
+        btn_style = """
+            background: #F1F5F9;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 4px;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            font-weight: 600;
+            color: #0F172A;
+        """ if is_active else """
+            background: transparent;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 14px;
+            margin-bottom: 4px;
+            width: 100%;
+            text-align: left;
+            cursor: pointer;
+            font-weight: 400;
+            color: #64748B;
+        """
+        st.markdown(f"""
+        <div style="{btn_style} display:flex; align-items:center; gap:10px;">
+            <i class="ti ti-{icon}" style="font-size:18px;"></i>
+            <span style="font-size:14px;">{label}</span>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button(label, key=f"nav_{label}", use_container_width=True,
+                     label_visibility="collapsed"):
+            st.session_state.page_name = label
+            st.rerun()
+
+page_name = st.session_state.page_name
 
 # ══════════════════════════════════════════
 # DASHBOARD
 # ══════════════════════════════════════════
 if page_name == "Dashboard":
-    st.title("📊 Dashboard")
+    st.title("Dashboard")
 
     n_clients  = len(sb.table("clients").select("id").execute().data)
     n_trips    = len(sb.table("trips").select("id").execute().data)
@@ -338,16 +491,15 @@ if page_name == "Dashboard":
     revenue    = sum(r["grand_total"] or 0 for r in inv_data)
 
     c1,c2,c3,c4 = st.columns(4)
-    def metric(col, label, value):
-        col.markdown(
-            f'<div class="metric-card"><div class="metric-value">{value}</div>'
-            f'<div class="metric-label">{label}</div></div>',
-            unsafe_allow_html=True)
-
-    metric(c1, "Total Clients",  n_clients)
-    metric(c2, "Total Trips",    n_trips)
-    metric(c3, "Total Invoices", n_invoices)
-    metric(c4, "Total Revenue",  f"${revenue:,.2f}")
+    def metric(col, label, value, icon):
+        col.markdown(f'''<div class="metric-card">
+        <i class="ti ti-{icon}" style="font-size:24px; color:#888; margin-bottom:10px; display:block;"></i>
+        <div class="metric-value">{value}</div>
+        <div class="metric-label">{label}</div></div>''', unsafe_allow_html=True)
+    metric(c1, "Total Clients",  n_clients,         "users")
+    metric(c2, "Total Trips",    n_trips,            "steering-wheel")
+    metric(c3, "Total Invoices", n_invoices,         "file-invoice")
+    metric(c4, "Total Revenue",  f"${revenue:,.2f}", "coin")
 
     st.markdown("---")
     recent = sb.table("invoices").select("invoice_number, invoice_date, grand_total, client_id, clients(client_name)").order("id", desc=True).limit(5).execute().data
@@ -363,13 +515,13 @@ if page_name == "Dashboard":
 # CLIENTS
 # ══════════════════════════════════════════
 elif page_name == "Clients":
-    st.title("👥 Client Management")
-    tab1, tab2, tab3 = st.tabs(["➕ Add Client", "🔍 Search / Edit", "📋 All Clients"])
+    st.title("Client Management")
+    tab1, tab2, tab3 = st.tabs(["Add Client", "Search / Edit", "All Clients"])
 
     with tab1:
         st.subheader("Add New Client")
         acc = next_account_number()
-        st.info(f"Account Number will be: **{acc}**")
+        alert(f"Account Number will be: <b>{acc}</b>", "info")
         with st.form("add_client"):
             c1,c2  = st.columns(2)
             name    = c1.text_input("Client Name *",     placeholder="e.g. John Smith")
@@ -378,20 +530,20 @@ elif page_name == "Clients":
             email   = c2.text_input("Email *",           placeholder="e.g. john@email.com")
             address = st.text_input("Billing Address *", placeholder="e.g. 123 Main St, Los Angeles, CA")
             notes   = st.text_area("Notes", height=80)
-            if st.form_submit_button("✅ Save Client", use_container_width=True):
+            if st.form_submit_button("Save Client", use_container_width=True):
                 errors = []
                 validate_required(name,    "Client Name",     errors)
                 validate_required(address, "Billing Address", errors)
                 validate_required(phone,   "Phone",           errors)
                 validate_required(email,   "Email",           errors)
                 if phone and not validate_phone(phone):
-                    errors.append("⚠️ **Phone** format is invalid. Use digits only, e.g. +1 310 555 0100")
+                    errors.append("<b>Phone</b> format is invalid. Use digits only, e.g. +1 310 555 0100")
                 if email and not validate_email(email):
-                    errors.append("⚠️ **Email** format is invalid. Use format: name@example.com")
+                    errors.append("<b>Email</b> format is invalid. Use format: name@example.com")
                 if not show_errors(errors):
                     client_sig = f"{name.strip()}|{phone.strip()}|{email.strip()}|{address.strip()}"
                     if is_duplicate_submit("last_client_save", client_sig):
-                        st.warning("⚠️ This client was already saved. Change the details to add another.")
+                        alert("This client was already saved. Change the details to add another.", "warning")
                     else:
                         sb.table("clients").insert({
                             "account_number": acc, "client_name": name.strip(),
@@ -399,7 +551,7 @@ elif page_name == "Clients":
                             "email": email.strip(), "address": address.strip(), "notes": notes.strip()
                         }).execute()
                         mark_submitted("last_client_save", client_sig)
-                        st.success(f"✅ Client **{name}** added with account **{acc}**!")
+                        alert(f"Client <b>{name}</b> added with account <b>{acc}</b>!", "success")
                         st.rerun()
 
     with tab2:
@@ -422,45 +574,45 @@ elif page_name == "Clients":
                     address = st.text_input("Address",      row.get('address','') or '')
                     notes   = st.text_area("Notes",         row.get('notes','') or '', height=70)
                     ca, cb  = st.columns(2)
-                    if ca.form_submit_button("💾 Update"):
+                    if ca.form_submit_button("Update"):
                         errors = []
                         validate_required(name,    "Client Name",     errors)
                         validate_required(address, "Billing Address", errors)
                         validate_required(phone,   "Phone",           errors)
                         validate_required(email,   "Email",           errors)
                         if phone and not validate_phone(phone):
-                            errors.append("⚠️ **Phone** format is invalid. Use digits only, e.g. +1 310 555 0100")
+                            errors.append("<b>Phone</b> format is invalid. Use digits only, e.g. +1 310 555 0100")
                         if email and not validate_email(email):
-                            errors.append("⚠️ **Email** format is invalid. Use format: name@example.com")
+                            errors.append("<b>Email</b> format is invalid. Use format: name@example.com")
                         if not show_errors(errors):
                             sb.table("clients").update({
                                 "client_name": name.strip(), "company_name": company.strip(),
                                 "phone": phone.strip(), "email": email.strip(),
                                 "address": address.strip(), "notes": notes.strip()
                             }).eq("id", row['id']).execute()
-                            st.success("✅ Updated!"); st.rerun()
-                    if cb.form_submit_button("🗑️ Delete"):
+                            alert("Updated!", "success"); st.rerun()
+                    if cb.form_submit_button("Delete"):
                         sb.table("clients").delete().eq("id", row['id']).execute()
-                        st.warning("Deleted."); st.rerun()
+                        alert("Deleted.", "warning"); st.rerun()
 
     with tab3:
         data = sb.table("clients").select("account_number,client_name,company_name,phone,email").order("id", desc=True).execute().data
         if data:
             st.dataframe(pd.DataFrame(data), use_container_width=True, hide_index=True)
         else:
-            st.info("No clients yet.")
+            alert("No clients yet.", "info")
 
 # ══════════════════════════════════════════
 # TRIPS
 # ══════════════════════════════════════════
 elif page_name == "Trips":
-    st.title("🗺️ Trip Management")
-    tab1, tab2 = st.tabs(["➕ Add Trip", "📋 View Trips"])
+    st.title("Trip Management")
+    tab1, tab2 = st.tabs(["Add Trip", "View Trips"])
 
     with tab1:
         clients = sb.table("clients").select("id,account_number,client_name").order("client_name").execute().data
         if not clients:
-            st.warning("No clients yet. Please add a client first.")
+            alert("No clients yet. Please add a client first.", "warning")
         else:
             opts = {f"{c['account_number']} — {c['client_name']}": c['id'] for c in clients}
             sel  = st.selectbox("Select Client *", list(opts.keys()))
@@ -489,7 +641,7 @@ elif page_name == "Trips":
                 total = base + grat + fuel + misc
                 st.metric("Trip Total", f"${total:.2f}")
 
-                submitted = st.form_submit_button("✅ Save Trip", use_container_width=True)
+                submitted = st.form_submit_button("Save Trip", use_container_width=True)
                 if submitted:
                     errors = []
                     validate_required(passenger,  "Passenger Name",    errors)
@@ -497,13 +649,13 @@ elif page_name == "Trips":
                     validate_required(dropoff,    "Drop-off Location", errors)
                     validate_required(veh_type,   "Vehicle Type",      errors)
                     if base == 0:
-                        errors.append("⚠️ **Base Rate** must be greater than $0.00")
+                        errors.append("<b>Base Rate</b> must be greater than $0.00")
                     if show_errors(errors):
                         pass
                     else:
                         trip_sig = f"{cid}|{conf_num}|{passenger}|{pickup_dt}|{base}|{grat}|{fuel}|{misc}"
                         if is_duplicate_submit("last_trip_save", trip_sig):
-                            st.warning("⚠️ This trip was already saved. Change the details to add another.")
+                            alert("This trip was already saved. Change the details to add another.", "warning")
                         else:
                             sb.table("trips").insert({
                                 "client_id": cid,
@@ -522,7 +674,7 @@ elif page_name == "Trips":
                                 "trip_total": total
                             }).execute()
                             mark_submitted("last_trip_save", trip_sig)
-                            st.success(f"✅ Trip saved! Total: **${total:.2f}**")
+                            alert(f"Trip saved! Total: <b>${total:.2f}</b>", "success")
                             st.rerun()
 
     with tab2:
@@ -538,11 +690,11 @@ elif page_name == "Trips":
                 trips = sb.table("trips").select("*, clients(account_number,client_name)").order("pickup_date", desc=True).limit(50).execute().data
 
             if not trips:
-                st.info("No trips found.")
+                alert("No trips found.", "info")
             else:
                 for t in trips:
                     cl = t.get("clients") or {}
-                    with st.expander(f"📅 {fmt_date(t['pickup_date'])} — {t['passenger_name']} | {t['service_type']} | ${t['trip_total']:.2f}"):
+                    with st.expander(f"{fmt_date(t['pickup_date'])} — {t['passenger_name']} | {t['service_type']} | ${t['trip_total']:.2f}"):
                         c1,c2,c3 = st.columns(3)
                         c1.write(f"**Account:** {cl.get('account_number','')}")
                         c2.write(f"**Client:** {cl.get('client_name','')}")
@@ -550,7 +702,7 @@ elif page_name == "Trips":
                         c1.write(f"**Pickup:** {t.get('pickup_location','')}")
                         c2.write(f"**Drop-off:** {t.get('dropoff_location','')}")
                         c3.write(f"**Total:** ${t['trip_total']:.2f}")
-                        if st.button("🗑️ Delete Trip", key=f"dt_{t['id']}"):
+                        if st.button("Delete Trip", key=f"dt_{t['id']}"):
                             sb.table("trips").delete().eq("id", t['id']).execute()
                             st.rerun()
 
@@ -558,8 +710,8 @@ elif page_name == "Trips":
 # INVOICES
 # ══════════════════════════════════════════
 elif page_name == "Invoices":
-    st.title("📄 Invoice Management")
-    tab1, tab2 = st.tabs(["🧾 Generate Invoice", "📚 Invoice History"])
+    st.title("Invoice Management")
+    tab1, tab2 = st.tabs(["Generate Invoice", "Invoice History"])
 
     logo_bytes = None
     logo_b64   = get_setting("logo_b64")
@@ -580,7 +732,7 @@ elif page_name == "Invoices":
     with tab1:
         clients = sb.table("clients").select("*").order("client_name").execute().data
         if not clients:
-            st.warning("No clients yet.")
+            alert("No clients yet.", "warning")
         else:
             opts      = {f"{c['account_number']} — {c['client_name']}": c for c in clients}
             selected  = st.selectbox("Select Client", list(opts.keys()))
@@ -593,7 +745,7 @@ elif page_name == "Invoices":
             date_to   = dr2.date_input("To",   value=date.today(),                  key="inv_to",   format="MM/DD/YYYY")
 
             if date_from > date_to:
-                st.error("⚠️ 'From' date must be before 'To' date.")
+                alert("'From' date must be before 'To' date.", "error")
                 st.stop()
 
             all_trips = sb.table("trips").select("*").eq("client_id", client['id']).order("pickup_date").execute().data
@@ -605,10 +757,10 @@ elif page_name == "Invoices":
             dr3.metric("Trips in range", f"{filtered} / {total_trips}")
 
             if not all_trips:
-                st.warning("This client has no trips. Add trips first.")
+                alert("This client has no trips. Add trips first.", "warning")
                 st.stop()
             elif not trips:
-                st.warning(f"No trips found between **{fmt_date(str(date_from))}** and **{fmt_date(str(date_to))}**. Try a wider date range.")
+                alert(f"No trips found between <b>{fmt_date(str(date_from))}</b> and <b>{fmt_date(str(date_to))}</b>. Try a wider date range.", "warning")
                 st.stop()
             else:
                 st.caption(f"Showing **{filtered}** trip(s) from **{fmt_date(str(date_from))}** to **{fmt_date(str(date_to))}**")
@@ -623,10 +775,10 @@ elif page_name == "Invoices":
                     st.metric("Grand Total", f"${grand_total:.2f}")
                     inv_date = st.date_input("Invoice Date", value=date.today())
 
-                    if st.button("🖨️ Generate & Save Invoice", use_container_width=True, type="primary"):
+                    if st.button("Generate & Save Invoice", use_container_width=True, type="primary"):
                         inv_sig = f"{client['id']}|{inv_date}|{grand_total}|{','.join(str(t['id']) for t in sel_trips)}"
                         if is_duplicate_submit("last_invoice_save", inv_sig):
-                            st.warning("⚠️ This invoice was already generated. Change the selection or date to create another.")
+                            alert("This invoice was already generated. Change the selection or date to create another.", "warning")
                         else:
                             inv_num   = next_invoice_number()
                             pdf_bytes = generate_invoice_pdf(
@@ -642,8 +794,8 @@ elif page_name == "Invoices":
                                 "pdf_data":       pdf_b64
                             }).execute()
                             mark_submitted("last_invoice_save", inv_sig)
-                            st.success(f"✅ Invoice **{inv_num}** generated!")
-                            st.download_button("⬇️ Download PDF", data=pdf_bytes,
+                            alert(f"Invoice <b>{inv_num}</b> generated!", "success")
+                            st.download_button("Download PDF", data=pdf_bytes,
                                                file_name=f"{inv_num}.pdf", mime="application/pdf")
 
     with tab2:
@@ -658,7 +810,7 @@ elif page_name == "Invoices":
                         s in (r.get("clients", {}) or {}).get("account_number","").lower()]
 
         if not inv_data:
-            st.info("No invoices yet.")
+            alert("No invoices yet.", "info")
         else:
             for row in inv_data:
                 cl = row.get("clients") or {}
@@ -668,12 +820,12 @@ elif page_name == "Invoices":
                     if row.get("pdf_data"):
                         try:
                             pdf_bytes = base64.b64decode(row["pdf_data"])
-                            ca.download_button("⬇️ Download PDF", data=pdf_bytes,
+                            ca.download_button("Download PDF", data=pdf_bytes,
                                                file_name=f"{row['invoice_number']}.pdf",
                                                mime="application/pdf", key=f"dl_{row['id']}")
                         except:
-                            ca.warning("PDF unavailable")
-                    if cb.button("🗑️ Delete", key=f"di_{row['id']}"):
+                            alert("PDF unavailable", "warning")
+                    if cb.button("Delete", key=f"di_{row['id']}"):
                         sb.table("invoices").delete().eq("id", row['id']).execute()
                         st.rerun()
 
@@ -681,10 +833,10 @@ elif page_name == "Invoices":
 # SETTINGS
 # ══════════════════════════════════════════
 elif page_name == "Settings":
-    st.title("⚙️ Company Settings")
-    st.info("These details appear on every invoice you generate.")
+    st.title("Company Settings")
+    alert("These details appear on every invoice you generate.", "info")
 
-    st.subheader("🖼️ Company Logo")
+    st.subheader("Company Logo")
     current_logo = get_setting("logo_b64")
     if current_logo:
         try:
@@ -696,14 +848,14 @@ elif page_name == "Settings":
     uploaded = st.file_uploader("Upload your logo (PNG or JPG)", type=["png","jpg","jpeg"])
     if uploaded:
         set_setting("logo_b64", base64.b64encode(uploaded.read()).decode())
-        st.success("✅ Logo saved!"); st.rerun()
+        alert("Logo saved!", "success"); st.rerun()
 
     if current_logo:
-        if st.button("🗑️ Remove Logo"):
+        if st.button("Remove Logo"):
             set_setting("logo_b64", ""); st.rerun()
 
     st.markdown("---")
-    st.subheader("🏢 Company Information")
+    st.subheader("Company Information")
     with st.form("company_settings"):
         co_name    = st.text_input("Company Name",  get_setting("co_name",    "EXECUTIVE LIMO"))
         co_tagline = st.text_input("Tagline",       get_setting("co_tagline", "Premium Chauffeur Services"))
@@ -711,10 +863,34 @@ elif page_name == "Settings":
         c1,c2      = st.columns(2)
         co_phone   = c1.text_input("Phone",         get_setting("co_phone",   "(310) 555-0100"))
         co_email   = c2.text_input("Email",         get_setting("co_email",   "billing@executivelimo.com"))
-        if st.form_submit_button("💾 Save Settings", use_container_width=True):
+        if st.form_submit_button("Save Settings", use_container_width=True):
             set_setting("co_name",    co_name)
             set_setting("co_tagline", co_tagline)
             set_setting("co_address", co_address)
             set_setting("co_phone",   co_phone)
             set_setting("co_email",   co_email)
-            st.success("✅ Settings saved! All future invoices will use this info.")
+            alert("Settings saved! All future invoices will use this info.", "success")
+# ── Bottom navigation bar (mobile only) ──
+current_page = st.session_state.get("page_name", "Dashboard")
+
+nav_pages = [
+    ("Dashboard", "layout-dashboard"),
+    ("Clients",   "users"),
+    ("Trips",     "steering-wheel"),
+    ("Invoices",  "file-invoice"),
+    ("Settings",  "settings"),
+]
+
+nav_items = ""
+for label, icon in nav_pages:
+    active_class = "active" if current_page == label else ""
+    nav_items += f"""
+    <div class="bottom-nav-item {active_class}" onclick="
+        window.parent.document.querySelectorAll('button[data-testid=\\"baseButton-secondary\\"]')
+        .forEach(b => {{ if(b.innerText === '{label}') b.click(); }});
+    ">
+        <i class="ti ti-{icon}"></i>
+        <span>{label}</span>
+    </div>"""
+
+st.markdown(f'<div class="bottom-nav">{nav_items}</div>', unsafe_allow_html=True)
